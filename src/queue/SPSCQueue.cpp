@@ -1,0 +1,109 @@
+#include "queue/SPSCQueue.hpp"
+
+#include <atomic>
+#include <cstring>
+#include <new>
+#include <thread>
+
+namespace csics::queue {
+SPSCQueue::SPSCQueue(size_t capacity)
+    : capacity_(capacity + kCacheLineSize -
+                (capacity % kCacheLineSize)),  // align capacity to cache line
+      buffer_(new (std::align_val_t(kCacheLineSize)) std::byte[capacity]),
+      read_index_(0),
+      write_index_(0) {}
+
+SPSCQueue::~SPSCQueue() {
+    operator delete[](buffer_, std::align_val_t(kCacheLineSize));
+};
+
+bool SPSCQueue::acquire_write(WriteSlot& slot, std::size_t size) {
+    if (size == 0 || size > capacity_) {
+        return false;
+    }
+
+    std::size_t read_index = read_index_.load(std::memory_order_acquire);
+    std::size_t write_index = write_index_.load(std::memory_order_acquire);
+
+    auto free_space = (read_index + capacity_ - write_index) % capacity_;
+
+    while (free_space < size + sizeof(QueueSlotHeader)) {
+        std::this_thread::yield();
+        free_space = (read_index_.load(std::memory_order_acquire) + capacity_ -
+                      write_index) %
+                     capacity_;
+    }
+
+    if (write_index + size + sizeof(QueueSlotHeader) < capacity_) {
+        slot.data = buffer_ + write_index;
+    } else {
+        auto padding_size = capacity_ - write_index;
+
+        QueueSlotHeader padding_header{
+            .padded = true,
+            .size = padding_size - sizeof(QueueSlotHeader),
+        };
+
+        std::memcpy(buffer_ + write_index, &padding_header,
+                    sizeof(QueueSlotHeader));
+        write_index_.store(0, std::memory_order_release);
+        write_index = 0;
+    }
+
+    QueueSlotHeader header{
+        .padded = false,
+        .size = size,
+    };
+
+    std::memcpy(&buffer_[write_index], &header, sizeof(QueueSlotHeader));
+    slot.data = &buffer_[write_index] + sizeof(QueueSlotHeader);
+
+    slot.size = size;
+
+    return true;
+};
+
+bool SPSCQueue::acquire_read(ReadSlot& slot) {
+    while (read_index_.load(std::memory_order_acquire) ==
+           write_index_.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+
+    auto header_ptr = reinterpret_cast<QueueSlotHeader*>(buffer_ + read_index_);
+    if (header_ptr->padded) {
+        read_index_.store(0, std::memory_order_release); 
+        header_ptr = reinterpret_cast<QueueSlotHeader*>(buffer_);
+    }
+
+    while (read_index_.load(std::memory_order_acquire) ==
+           write_index_.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+
+    slot.data = buffer_ + read_index_.load(std::memory_order_acquire) +
+                sizeof(QueueSlotHeader);
+    slot.size = header_ptr->size;
+
+    return true;
+}
+
+bool SPSCQueue::commit_write(const WriteSlot& slot) {
+    auto new_index = write_index_ + slot.size + sizeof(QueueSlotHeader);
+    new_index = (new_index + kCacheLineSize - 1) & ~(kCacheLineSize - 1);
+    new_index = new_index % capacity_;
+
+    write_index_.store(new_index, std::memory_order_release);
+
+    return true;
+}
+
+bool SPSCQueue::commit_read(const ReadSlot& slot) {
+    auto new_index = read_index_ + slot.size + sizeof(QueueSlotHeader);
+    new_index = (new_index + kCacheLineSize - 1) & ~(kCacheLineSize - 1);
+    new_index = new_index % capacity_;
+    read_index_.store(new_index, std::memory_order_release);
+
+    return true;
+}
+
+};  // namespace csics::queue
