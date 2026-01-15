@@ -24,7 +24,9 @@ class SPSCQueue {
    public:
     struct ReadSlot;
     struct WriteSlot;
-    SPSCQueue(size_t capacity) noexcept;
+    SPSCQueue(const SPSCQueue&) = delete;
+    SPSCQueue& operator=(const SPSCQueue&) = delete;
+    explicit SPSCQueue(size_t capacity) noexcept;
     ~SPSCQueue() noexcept;
 
     // Acquire a read slot.

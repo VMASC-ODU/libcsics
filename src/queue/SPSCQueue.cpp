@@ -1,4 +1,4 @@
-#include "queue/SPSCQueue.hpp"
+#include <csics/queue/SPSCQueue.hpp>
 
 #include <atomic>
 #include <cstring>

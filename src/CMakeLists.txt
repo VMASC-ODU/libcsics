@@ -7,7 +7,13 @@ if (CSICS_BUILD_QUEUE)
     add_library(queue STATIC queue/SPSCQueue.cpp)
     target_include_directories(queue PUBLIC ${INCLUDE_DIR})
     add_library(CSICS::queue ALIAS queue)
+    target_compile_options(queue PRIVATE
+        $<$<IN_LIST:$<CXX_COMPILER_ID>,GNU;Clang>:-Wall -Wextra -Wpedantic>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+)
 endif()
 
-
-
+if (CSICS_BUILD_RADIO)
+    add_subdirectory(radio)
+    add_library(CSICS::radio ALIAS radio)
+endif()

@@ -3,12 +3,12 @@
 #include <uhd/usrp/multi_usrp.hpp>
 
 namespace csics::radio {
-class USRPRadioRx : public RadioRx {
+class USRPRadioRx : public IRadioRx {
    public:
     explicit USRPRadioRx(const RadioDeviceArgs& device_args);
     ~USRPRadioRx() override;
     StartStatus start_stream(
-        const StreamConfiguration* const stream_config) noexcept override;
+        const StreamConfiguration& stream_config) noexcept override;
 
     void stop_stream() noexcept override;
 
@@ -24,15 +24,20 @@ class USRPRadioRx : public RadioRx {
     double get_gain() const noexcept override;
     void set_gain(double gain) noexcept override;
 
-    double get_channel_bandwidth() const noexcept override;
-    void set_channel_bandwidth(double bandwidth) noexcept override;
-
     RadioConfiguration get_configuration() const noexcept override;
     void set_configuration(const RadioConfiguration& config) noexcept override;
     RadioDeviceInfo get_device_info() const noexcept override;
    private:
-    csics::queue::SPSCQueue queue_;
+    csics::queue::SPSCQueue* queue_;
+    RadioConfiguration current_config_;
     uhd::usrp::multi_usrp::sptr usrp_;
     uhd::rx_streamer::sptr rx_streamer_;
+    std::thread rx_thread_;
+    
+
+    std::atomic<bool> streaming_;
+    std::atomic<bool> stop_signal_{false};
+
+    void rx_loop() noexcept;
 };
 };  // namespace csics::radio
