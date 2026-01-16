@@ -77,6 +77,14 @@ struct SampleLength {
         std::chrono::nanoseconds duration;
     };
 
+    SampleLength() : type(Type::NUM_SAMPLES), num_samples(256) {};
+    SampleLength(Type t, std::size_t n) : type(t), num_samples(n) {}
+    SampleLength(std::size_t n) : type(Type::NUM_SAMPLES), num_samples(n) {}
+    template <typename Rep, typename Period>
+    SampleLength(std::chrono::duration<Rep, Period> d)
+        : type(Type::DURATION),
+          duration(std::chrono::duration_cast<std::chrono::nanoseconds>(d)) {}
+
     std::size_t get_num_samples(double sample_rate) const {
         if (type == Type::NUM_SAMPLES) {
             return num_samples;
@@ -114,7 +122,7 @@ struct Timestamp {
     }
 
     operator uint64_t() const { return nanoseconds_since_epoch; }
-    template<typename Clock>
+    template <typename Clock>
 
     operator std::chrono::time_point<Clock, std::chrono::nanoseconds>() const {
         return std::chrono::time_point<Clock, std::chrono::nanoseconds>(
