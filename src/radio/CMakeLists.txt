@@ -1,7 +1,7 @@
 
-list(SOURCES RadioRx.cpp Radio.cpp)
-list(LIBRARIES queue)
-list(DEFINITIONS)
+set(SOURCES RadioRx.cpp Radio.cpp)
+set(LIBRARIES queue)
+set(DEFINITIONS)
 
 set(COMPILE_OPTIONS
     $<$<IN_LIST:$<CXX_COMPILER_ID>,GNU;Clang>:-Wall -Wextra -Wpedantic>
@@ -9,9 +9,9 @@ set(COMPILE_OPTIONS
 )
 
 if (CSICS_USE_UHD)
-    list(APPEND SOURCES usrp/USRPRadioRx.cpp)
-    list(APPEND LIBRARIES uhd)
-    list(APPEND DEFINITIONS CSICS_USE_UHD)
+    set(SOURCES ${SOURCES} usrp/USRPRadioRx.cpp)
+    set(LIBRARIES ${LIBRARIES} uhd)
+    set(DEFINITIONS ${DEFINITIONS} CSICS_USE_UHD)
 endif()
 
 add_library(rx OBJECT RadioRx.cpp ${SOURCES})
