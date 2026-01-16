@@ -1,5 +1,5 @@
 
-set(SOURCES)
+set(SOURCES RadioRx.cpp Radio.cpp)
 set(LIBRARIES queue)
 set(DEFINITIONS)
 
