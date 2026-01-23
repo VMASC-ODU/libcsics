@@ -3,16 +3,37 @@
 #include <atomic>
 #include <cstddef>
 #include <iterator>
+#include <new>
 
 namespace csics::queue {
 
 #ifdef CACHE_LINE_SIZE
 constexpr size_t kCacheLineSize = CACHE_LINE_SIZE;
 #else
-constexpr size_t kCacheLineSize = 64;
+constexpr size_t kCacheLineSize = std::hardware_destructive_interference_size;
 #endif
+class SPSCQueue;
 
-class SPSCQueueRange;
+class SPSCQueueRange {
+   public:
+    explicit SPSCQueueRange(SPSCQueue& queue) noexcept;
+
+    struct iterator;
+    struct sentinel {};
+
+    inline iterator begin() noexcept;
+    inline sentinel end() const;
+
+   private:
+    SPSCQueue* queue_;
+};
+
+enum class SPSCError {
+    None,
+    FULL,
+    EMPTY,
+    TOO_BIG,
+};
 
 // Single Producer Single Consumer Queue
 // Uses a circular buffer with atomic indices for read and write.
@@ -31,36 +52,34 @@ class SPSCQueue {
 
     // Acquire a read slot.
     // ReadSlot will be populated with the data pointer and size.
-    // Blocks until a slot is available or the queue is stopped.
     // Returns true if successful, false otherwise.
     // Will return false if the queue is stopped and there is no data to read.
-    bool acquire_read(ReadSlot& slot) noexcept;
-    // Attempt to acquire a read slot without blocking.
-    // Will return false if no slot is available.
-    bool try_acquire_read(ReadSlot& slot) noexcept;
+    [[nodiscard]]
+    SPSCError acquire_read(ReadSlot& slot) noexcept;
 
     // Release a previously acquired read slot.
-    bool commit_read(const ReadSlot& slot) noexcept;
+    [[nodiscard]]
+    SPSCError commit_read(const ReadSlot& slot) noexcept;
 
     // Acquire a write slot.
     // WriteSlot will be populated with the data pointer and size.
     // Blocks until a slot is available or the queue is stopped.
-    bool acquire_write(WriteSlot& slot, std::size_t size) noexcept;
-    // Attempt to acquire a write slot without blocking.
-    // WriteSlot will be populated with the data pointer and size.
-    // Returns false if no slot is available.
-    bool try_acquire_write(WriteSlot& slot, std::size_t size) noexcept;
+    [[nodiscard]]
+    SPSCError acquire_write(WriteSlot& slot, std::size_t size) noexcept;
 
     // Release a previously acquired write slot.
-    bool commit_write(const WriteSlot& slot) noexcept;
+    [[nodiscard]]
+    SPSCError commit_write(const WriteSlot& slot) noexcept;
 
-    // Stop the queue. Unblocks any waiting acquire calls.
-    void stop();
+    inline std::size_t capacity() const noexcept { return capacity_; }
 
-    std::size_t capacity() const { return capacity_; }
+    inline bool has_pending_data() const noexcept {
+        return read_index_.load(std::memory_order_acquire) <
+               write_index_.load(std::memory_order_acquire);
+    }
 
-    bool has_pending_data() const noexcept {
-        return data_available_.load(std::memory_order_acquire);
+    inline SPSCQueueRange read_range() noexcept {
+        return SPSCQueueRange(*this);
     }
 
    private:
@@ -73,12 +92,13 @@ class SPSCQueue {
     };
 
 #ifdef _MSC_VER
-#pragma warning(disable : 4324) // disable MSVC warning 4324. We don't care about the padding here
+#pragma warning(disable : 4324)  // disable MSVC warning 4324. We don't care
+                                 // about the padding here
 #endif
     alignas(kCacheLineSize) std::atomic<size_t> read_index_;
     alignas(kCacheLineSize) std::atomic<size_t> write_index_;
-    alignas(kCacheLineSize) std::atomic<bool> stopped_;
-    alignas(kCacheLineSize) std::atomic<bool> data_available_;
+
+    inline bool is_full();
 
    public:
     struct ReadSlot {
@@ -86,8 +106,14 @@ class SPSCQueue {
         size_t size;
 
         template <typename T>
-        const T& as() {
-            return *reinterpret_cast<const T*>(data);
+        const T* as() const noexcept {
+            return *reinterpret_cast<T*>(data);
+        }
+
+        template<typename Header, typename Data>
+        void as_block(Header*& header, Data*& data) const noexcept {
+            header = reinterpret_cast<Header*>(this->data);
+            data = reinterpret_cast<Data*>(this->data + sizeof(Header));
         }
     };
 
@@ -96,8 +122,14 @@ class SPSCQueue {
         size_t size;
 
         template <typename T>
-        T& as() {
+        T* as() {
             return *static_cast<T*>(data);
+        }
+
+        template <typename Header, typename Data>
+        void as_block(Header*& header, Data*& data) const noexcept {
+            header = reinterpret_cast<Header*>(this->data);
+            data = reinterpret_cast<Data*>(this->data + sizeof(Header));
         }
     };
 };
@@ -107,19 +139,6 @@ class SPSCQueue {
 // Exits when the queue is stopped, not when empty. The producer must stop the
 // queue. Typically used in a consumer thread to process incoming data. Will
 // manage committing read slots automatically.
-class SPSCQueueRange {
-   public:
-    explicit SPSCQueueRange(SPSCQueue& queue) noexcept;
-
-    struct iterator;
-    struct sentinel {};
-
-    inline iterator begin() noexcept;
-    inline sentinel end() const;
-
-   private:
-    SPSCQueue* queue_;
-};
 
 struct SPSCQueueRange::iterator {
     using iterator_category = std::input_iterator_tag;
@@ -150,197 +169,4 @@ struct SPSCQueueRange::iterator {
     ~iterator() noexcept;
 };
 
-/*!
- * Adapter for SPSCQueue to handle blocks with headers and data.
- * Allows for easy reading and writing of blocks consisting of a header and data
- * array. Same acquire/commit semantics as SPSCQueue. Example:
- * ```cpp
- *      struct MyHeader { uint32_t id; uint32_t timestamp; };
- *      using MyDataType = float;
- *      SPSCQueue queue(1024);
- *      SPSCQueueBlockAdapter<MyHeader, MyDataType> adapter(queue);
- *      SPSCQueueBlockAdapter<MyHeader, MyDataType>::AdaptedSlot slot;
- *      if (adapter.acquire_write(slot)) {
- *          slot.header->id = 1;
- *          slot.header->timestamp = GetTimestamp();
- *          for (size_t i = 0; i < slot.size; ++i) {
- *           slot.data[i] = ...; // fill data
- *      }
- *      adapter.commit_write(slot);
- *  }
- *  ```
- */
-template <typename Header, typename Data>
-class SPSCQueueBlockAdapter {
-   public:
-    explicit SPSCQueueBlockAdapter(SPSCQueue& queue) : queue_(queue) {}
-
-    struct AdaptedSlot {
-        Header* header;
-        Data* data;
-        std::size_t size;
-    };
-
-    bool acquire_write(AdaptedSlot& slot, size_t len) noexcept {
-        SPSCQueue::WriteSlot raw_slot;
-        bool acquired =
-            queue_.acquire_write(raw_slot, sizeof(Header) + sizeof(Data) * len);
-        if (!acquired) {
-            return false;
-        }
-
-        slot.header = reinterpret_cast<Header*>(raw_slot.data);
-        slot.data = reinterpret_cast<Data*>(raw_slot.data + sizeof(Header));
-        slot.size = (raw_slot.size - sizeof(Header)) / sizeof(Data);
-        return true;
-    }
-
-    bool try_acquire_write(AdaptedSlot& slot, size_t len) noexcept {
-        SPSCQueue::WriteSlot raw_slot;
-        bool acquired =
-            queue_.try_acquire_write(raw_slot, sizeof(Header) + sizeof(Data) * len);
-        if (!acquired) {
-            return false;
-        }
-
-        slot.header = reinterpret_cast<Header*>(raw_slot.data);
-        slot.data = reinterpret_cast<Data*>(raw_slot.data + sizeof(Header));
-        slot.size = (raw_slot.size - sizeof(Header)) / sizeof(Data);
-        return true;
-    }
-
-    bool commit_write(AdaptedSlot& slot) noexcept {
-        SPSCQueue::WriteSlot raw_slot;
-        raw_slot.data = reinterpret_cast<std::byte*>(slot.header);
-        raw_slot.size = sizeof(Header) + sizeof(Data);
-        return queue_.commit_write(raw_slot);
-    }
-
-    bool acquire_read(AdaptedSlot& slot) noexcept {
-        SPSCQueue::ReadSlot raw_slot;
-        bool acquired = queue_.acquire_read(raw_slot);
-        if (!acquired) {
-            return false;
-        }
-
-        slot.header = reinterpret_cast<Header*>(const_cast<std::byte*>(raw_slot.data));
-        slot.data = reinterpret_cast<Data*>(raw_slot.data + sizeof(Header));
-        slot.size = (raw_slot.size - sizeof(Header)) / sizeof(Data);
-        return true;
-    }
-
-    bool try_acquire_read(AdaptedSlot& slot) noexcept {
-        SPSCQueue::ReadSlot raw_slot;
-        bool acquired = queue_.try_acquire_read(raw_slot);
-        if (!acquired) {
-            return false;
-        }
-
-        slot.header = reinterpret_cast<Header*>(raw_slot.data);
-        slot.data = reinterpret_cast<Data*>(raw_slot.data + sizeof(Header));
-        slot.size = (raw_slot.size - sizeof(Header)) / sizeof(Data);
-        return true;
-    }
-
-    bool commit_read(AdaptedSlot& slot) noexcept {
-        SPSCQueue::ReadSlot raw_slot;
-        raw_slot.data = reinterpret_cast<std::byte*>(slot.header);
-        raw_slot.size = sizeof(Header) + sizeof(Data);
-        return queue_.commit_read(raw_slot);
-    }
-
-   private:
-    SPSCQueue& queue_;
-};
-
-// Range-based iterator for reading from SPSCQueueBlockAdapter
-// Allows for easy iteration over available adapted read slots in the queue.
-// Exits when the queue is stopped, not when empty. The producer must stop the
-// queue. Typically used in a consumer thread to process incoming data. Will
-// manage committing read slots automatically.
-template <typename Header, typename Data>
-class SPSCQueueBlockAdapterRange {
-   public:
-    explicit SPSCQueueBlockAdapterRange(
-        SPSCQueueBlockAdapter<Header, Data>* q) noexcept
-        : queue_(q) {}
-
-    struct iterator;
-    struct sentinel {};
-
-    inline iterator begin() noexcept { return iterator(queue_); }
-
-    inline sentinel end() const { return sentinel{}; }
-
-   private:
-    SPSCQueueBlockAdapter<Header, Data>* queue_;
-};
-
-template <typename Header, typename Data>
-struct SPSCQueueBlockAdapterRange<Header, Data>::iterator {
-    using iterator_category = std::input_iterator_tag;
-    using value_type =
-        typename csics::queue::SPSCQueueBlockAdapter<Header, Data>::AdaptedSlot;
-    struct AdaptedSlotRef {
-        const Header& header;
-        const Data* data;
-        std::size_t size;
-    };
-    using ref_type = AdaptedSlotRef;
-    using difference_type = std::ptrdiff_t;
-
-    SPSCQueueBlockAdapter<Header, Data>* queue = nullptr;
-    value_type current_block{nullptr, nullptr, 0};
-
-    bool end_reached = false;
-
-    iterator() noexcept = default;
-    explicit iterator(SPSCQueueBlockAdapter<Header, Data>* q) noexcept
-        : queue(q) {
-        if (this->queue) {
-            bool acquired = this->queue->acquire_read(current_block);
-            if (!acquired) {
-                end_reached = true;
-                this->queue = nullptr;
-            }
-        } else {
-            end_reached = true;
-        }
-    }
-
-    iterator& operator++() noexcept {
-        if (this->queue && !end_reached) {
-            queue->commit_read(current_block);
-            bool acquired = this->queue->acquire_read(current_block);
-            if (!acquired) {
-                end_reached = true;
-                this->queue = nullptr;
-            }
-        } else {
-            end_reached = true;
-        }
-        return *this;
-    }
-
-    void operator++(int) { ++(*this); }
-
-    friend bool operator==(const iterator& it, const sentinel&) noexcept {
-        return it.queue == nullptr || it.end_reached;
-    }
-
-    friend bool operator!=(const iterator& it, const sentinel&) noexcept {
-        return !(it == sentinel{});
-    }
-
-    ref_type operator*() const noexcept {
-        return ref_type{*current_block.header, current_block.data,
-                        current_block.size};
-    };
-
-    ~iterator() noexcept {
-        if (queue && !end_reached) {
-            queue->commit_read(current_block);
-        }
-    };
-};
 };  // namespace csics::queue

@@ -10,7 +10,7 @@ namespace csics::radio {
 inline bool find_usrp() { 
     uhd_string_vector_handle sv;
     uhd_string_vector_make(&sv);
-    auto devs = uhd_usrp_find("", &sv);
+    uhd_usrp_find("", &sv);
     size_t size = 0;
     uhd_string_vector_size(sv, &size);
     return size != 0;

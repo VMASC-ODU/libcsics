@@ -5,13 +5,11 @@ namespace csics::radio {
 
 USRPRadioRx::~USRPRadioRx() {
     stop_stream();
-    if (rx_queue_ != nullptr) delete rx_queue_;
     if (queue_ != nullptr) delete queue_;
 };
 
 USRPRadioRx::USRPRadioRx(const RadioDeviceArgs& device_args)
     : queue_(nullptr),
-      rx_queue_(nullptr),
       block_len_(0),
       usrp_(nullptr) {
 
@@ -35,10 +33,8 @@ USRPRadioRx::StartStatus USRPRadioRx::start_stream(
     const StreamConfiguration& stream_config) noexcept {
     if (is_streaming()) {
         stop_stream();
-        delete rx_queue_;
         delete queue_;
         queue_ = nullptr;
-        rx_queue_ = nullptr;
     }
 
     block_len_ = stream_config.sample_length.get_num_samples(
@@ -59,8 +55,7 @@ USRPRadioRx::StartStatus USRPRadioRx::start_stream(
 
     streaming_.store(true, std::memory_order_release);
     rx_thread_ = std::thread(&USRPRadioRx::rx_loop, this);
-    rx_queue_ = new RxQueue(*queue_);
-    return {StartStatus::Code::SUCCESS, rx_queue_};
+    return {StartStatus::Code::SUCCESS, queue_};
 }
 
 bool USRPRadioRx::is_streaming() const noexcept {
@@ -157,28 +152,27 @@ RadioDeviceInfo USRPRadioRx::get_device_info() const noexcept {
 }
 
 void USRPRadioRx::rx_loop() noexcept {
-    RxQueue::AdaptedSlot slot {};
+    queue::SPSCQueue::WriteSlot slot {};
     IQSample* cursor = nullptr;
+    IQSample* base = nullptr;
+    BlockHeader* hdr = nullptr;
 	uhd_rx_metadata_handle md;
     while (!stop_signal_.load(std::memory_order_acquire)) {
-        if (!rx_queue_->acquire_write(slot, block_len_)) {
-            break;
+        while (queue_->acquire_write(slot, block_len_) != queue::SPSCError::None) {
         }
-        cursor = slot.data;
-        auto hdr = slot.header;
-        if (!hdr) {
-            break;
-        }
+        slot.as_block(hdr, base);
         hdr->timestamp_ns = Timestamp::now();
         hdr->num_samples = slot.size;
         uhd_rx_metadata_make(&md);
         size_t num_rx_samps = 0;
-        while (cursor < slot.data + slot.size) {
+        while (cursor < base + slot.size) {
             uhd_rx_streamer_recv(rx_streamer_, reinterpret_cast<void**>(&slot.data),
-                                 slot.size - (cursor - slot.data), &md, 0.1, false, &num_rx_samps);
+                                 slot.size - (cursor - base), &md, 0.1, false, &num_rx_samps);
             cursor += num_rx_samps;
         }
-        rx_queue_->commit_write(slot);
+
+        while (queue_->commit_write(slot) != queue::SPSCError::None) {
+        }
     }
     uhd_rx_metadata_free(&md);
 }

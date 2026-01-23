@@ -20,7 +20,6 @@ class IRadioRx {
 
     struct StartStatus;
     struct BlockHeader;
-    using RxQueue = csics::queue::SPSCQueueBlockAdapter<BlockHeader, IQSample>;
 
 
     virtual ~IRadioRx() = default;
@@ -72,7 +71,7 @@ class IRadioRx {
             HARDWARE_FAILURE,
             CONFIGURATION_ERROR,
         } code;
-        RxQueue* queue = nullptr;
+        queue::SPSCQueue* queue = nullptr;
 
         operator bool() const noexcept {
             return code == Code::SUCCESS && queue != nullptr;

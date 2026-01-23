@@ -32,7 +32,6 @@ class USRPRadioRx : public IRadioRx {
     RadioDeviceInfo get_device_info() const noexcept override;
    private:
     queue::SPSCQueue* queue_;
-    RxQueue* rx_queue_;
     RadioConfiguration current_config_;
     uhd_usrp_handle usrp_;
     uhd_rx_streamer_handle rx_streamer_;
