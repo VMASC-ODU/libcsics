@@ -108,7 +108,9 @@ class SPSCQueue {
             ReadHandle(const ReadHandle&) = delete;
             ReadHandle& operator=(const ReadHandle&) = delete;
             ReadHandle(ReadHandle&&) = default;
-            ReadHandle& operator=(ReadHandle&&) = delete;
+            ReadHandle& operator=(ReadHandle&&) {
+                return *this;
+            };
 
         protected:
             explicit ReadHandle(SPSCQueue& queue) : queue_(queue) {}
@@ -131,7 +133,9 @@ class SPSCQueue {
             WriteHandle(const WriteHandle&) = delete;
             WriteHandle& operator=(const WriteHandle&) = delete;
             WriteHandle(WriteHandle&&) = default;
-            WriteHandle& operator=(WriteHandle&&) = delete;
+            WriteHandle& operator=(WriteHandle&&) {
+                return *this;
+            };
 
         protected:
             explicit WriteHandle(SPSCQueue& queue) : queue_(queue) {}
