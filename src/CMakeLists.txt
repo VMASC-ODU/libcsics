@@ -17,3 +17,8 @@ if (CSICS_BUILD_RADIO)
     add_subdirectory(radio)
     add_library(CSICS::radio ALIAS radio)
 endif()
+
+if (CSICS_BUILD_IO)
+    add_subdirectory(io)
+    add_library(CSICS::io ALIAS io)
+endif()

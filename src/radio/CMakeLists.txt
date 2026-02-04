@@ -4,7 +4,7 @@ set(
     Radio.cpp
 )
 set(LIBRARIES queue)
-set(DEFINITIONS)
+set(DEFINITIONS ${CSICS_COMPILE_DEFINITIONS})
 
 set(COMPILE_OPTIONS
     $<$<IN_LIST:$<CXX_COMPILER_ID>,GNU;Clang>:-Wall -Wextra -Wpedantic>
@@ -14,7 +14,6 @@ set(COMPILE_OPTIONS
 if (CSICS_USE_UHD)
     set(SOURCES ${SOURCES} usrp/USRPRadioRx.cpp)
     set(LIBRARIES ${LIBRARIES} uhd)
-    set(DEFINITIONS ${DEFINITIONS} CSICS_USE_UHD)
 endif()
 
 add_library(radio STATIC ${SOURCES})

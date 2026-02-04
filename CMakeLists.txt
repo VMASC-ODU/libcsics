@@ -11,20 +11,20 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 
-option(CSICS_BUILD_QUEUE "Build the queue module" ON)
-option(CSICS_BUILD_RADIO "Build the radio module" ON)
-option(CSICS_USE_UHD "Use the UHD library for USRP support" ON)
-option(CSICS_FORCE_SYSTEM_UHD "Force using system-installed UHD library" OFF)
-option(CSICS_ENABLE_TESTS "Enable building tests" ON)
+option(CSICS_BUILD_ALL "Build all modules" ON)
+option(CSICS_BUILD_QUEUE "Build the queue module" ${CSICS_BUILD_ALL})
+option(CSICS_BUILD_RADIO "Build the radio module" ${CSICS_BUILD_ALL})
+option(CSICS_BUILD_IO "Build the IO module" ${CSICS_BUILD_ALL})
+option(CSICS_USE_UHD "Use the UHD library for USRP support" ${CSICS_BUILD_RADIO})
+option(CSICS_USE_ZSTD "Use the ZSTD library for compression support" ${CSICS_BUILD_IO})
+option(CSICS_USE_ZLIB "Use the ZLIB library for compression support" ${CSICS_BUILD_IO})
+option(CSICS_ENABLE_TESTS "Enable building tests" ${CSICS_BUILD_ALL})
 
-set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
+set(CSICS_COMPILE_DEFINITIONS)
+include(cmake/deps.cmake)
 
 set(COMPONENTS CSICS::core)
-
-if (CSICS_USE_UHD)
-    message(STATUS "UHD support enabled")
-    include(cmake/uhd.cmake)
-endif()
 
 if (CSICS_BUILD_QUEUE)
     list(APPEND COMPONENTS CSICS::queue)
@@ -34,11 +34,16 @@ if (CSICS_BUILD_RADIO)
     list(APPEND COMPONENTS CSICS::radio)
 endif()
 
+if (CSICS_BUILD_IO)
+    list(APPEND COMPONENTS CSICS::io)
+endif()
+
 add_subdirectory(src)
 
 add_library(CSICS INTERFACE)
 target_include_directories(CSICS INTERFACE ${INCLUDE_DIR})
 target_link_libraries(CSICS INTERFACE ${COMPONENTS})
+target_compile_definitions(CSICS INTERFACE ${CSICS_COMPILE_DEFINITIONS})
 
 message(STATUS "CSICS build configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
