@@ -19,6 +19,8 @@ if (CSICS_USE_ZLIB)
     list(APPEND HEADERS ${ZLIB_INCLUDE_DIRS})
 endif()
 
+add_subdirectory(net)
+list(APPEND LIBS net)
 add_library(io STATIC ${SOURCES})
 target_compile_definitions(io PUBLIC ${COMPILE_DEFINITIONS})
 message(DEBUG "IO module sources: ${SOURCES}")

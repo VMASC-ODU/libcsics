@@ -52,6 +52,11 @@ class BufferView {
         return buf_[index];
     }
 
+    template<typename T>
+    T& as() noexcept {
+        return *reinterpret_cast<T*>(buf_);
+    }
+
    private:
     uint8_t* buf_;
     std::size_t size_;
