@@ -172,7 +172,6 @@ void USRPRadioRx::rx_loop() noexcept {
         }
         slot.as_block(hdr, base);
         hdr->timestamp_ns = Timestamp::now();
-        hdr->num_samples = slot.size;
         uhd_rx_metadata_make(&md);
         size_t num_rx_samps = 0;
         cursor = base;
@@ -183,6 +182,8 @@ void USRPRadioRx::rx_loop() noexcept {
             // add in error handling here later
             cursor += num_rx_samps;
         }
+
+        hdr->num_samples = ((base + block_len_) - cursor);
 
         queue_->commit_write(std::move(slot));
     }
