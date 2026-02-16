@@ -187,25 +187,10 @@ void USRPRadioRx::rx_loop() noexcept {
                   << ", slot size: " << slot.size << std::endl;
         cursor = base;
         while (cursor < base + block_len_) {
-            auto err = uhd_rx_streamer_recv(
+            uhd_rx_streamer_recv(
                 rx_streamer_, reinterpret_cast<void**>(&slot.data),
                 (base + block_len_) - cursor, &md, 0.1, false, &num_rx_samps);
-            if (num_rx_samps > 0) {
-                std::cerr << "Received " << num_rx_samps
-                          << " samples from USRP device" << std::endl;
-            } else {
-                std::cerr
-                    << "No samples received from USRP device in this iteration"
-                    << std::endl;
-            }
-            if (err != UHD_ERROR_NONE) [[unlikely]] {
-                char err_str[256];
-                uhd_get_last_error(err_str, 256);
-                std::cerr
-                    << "Error receiving samples from USRP device. Error code: "
-                    << err << ", Error message: " << err_str << std::endl;
-                break;
-            }
+            // add in error handling here later
             cursor += num_rx_samps;
         }
 
