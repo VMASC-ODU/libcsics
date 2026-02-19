@@ -1,20 +1,11 @@
 #pragma once
 
+#include <csics/linalg/Concepts.hpp>
 #include <concepts>
 #include <tuple>
 
 namespace csics::linalg {
 
-template <typename T>
-concept ComplexLike = requires(T a) {
-    typename T::value_type;
-    { a.real() } -> std::convertible_to<typename T::value_type>;
-    { a.imag() } -> std::convertible_to<typename T::value_type>;
-    { T(a.real(), a.imag()) } -> std::same_as<T>;
-};
-
-template <typename T>
-concept ComplexPrimitive = std::is_arithmetic_v<T> && std::is_signed_v<T>;
 
 template <typename T>
 class Complex {
@@ -39,19 +30,19 @@ class Complex {
 static_assert(ComplexLike<Complex<float>>);
 
 template <ComplexLike T>
-constexpr inline T operator+(const T& a, const T& b) {
+constexpr inline T operator+(T&& a, T&& b) {
     return T(a.real() + b.real(), a.imag() + b.imag());
 }
 
 template <ComplexLike T>
-constexpr inline T operator-(const T& a, const T& b) {
+constexpr inline T operator-(T&& a, T&& b) {
     return T(a.real() - b.real(), a.imag() - b.imag());
 }
 
 template <ComplexLike T>
 constexpr inline T operator*(const T& a, const T& b) {
-    return T(a.real() * b.real() - a.imag() * b.imag(),
-             a.real() * b.imag() + a.imag() * b.real());
+    return T(std::fma(-a.imag(), b.imag(), a.real() * b.real()),
+             std::fma(a.real(), b.imag(), a.imag() * b.real()));
 }
 
 template <ComplexLike T>
@@ -70,7 +61,6 @@ template <ComplexLike T>
 constexpr inline T operator*(const typename T::value_type& s, const T& c) {
     return c * s;
 };
-
 
 template <ComplexLike T>
 constexpr inline T operator/(const T& c, const typename T::value_type& s) {

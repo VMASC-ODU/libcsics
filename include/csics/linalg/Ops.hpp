@@ -1,8 +1,32 @@
 #pragma once
 #include <cmath>
-#include <csics/linalg/Vec.hpp>
+#include <csics/linalg/Concepts.hpp>
+#include <tuple>
 
 namespace csics::linalg {
+
+// multiply and accumulate
+// a * b + c
+class Mac {
+   public:
+    template <typename T>
+    constexpr auto operator()(const T& a, const T& b,
+                              const T& c) const noexcept {
+        return apply(a, b, c);
+    }
+
+    template <ScalarLike Scalar>
+    static auto apply(const Scalar& a, const Scalar& b, const Scalar& c) {
+        return a * b + c;
+    }
+
+    template <FloatScalarLike Scalar>
+    static auto apply(const Scalar& a, const Scalar& b, const Scalar& c) {
+        return std::fma(a, b, c);
+    }
+};
+
+constexpr Mac mac;
 
 class Dot {
    public:
@@ -67,6 +91,19 @@ class Abs {
                 return ((v.template get<Is>(v) * v.template get<Is>(v)) + ...);
             },
             std::make_index_sequence<VecU::size_v>{}));
+    }
+};
+
+class Conj {
+   public:
+    template <typename T>
+    constexpr auto operator()(const T& v) const noexcept {
+        return apply(v);
+    }
+
+    template <ComplexLike ComplexU>
+    static auto apply(const ComplexU& c) {
+        return ComplexU(c.real(), -c.imag());
     }
 };
 

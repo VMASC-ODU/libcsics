@@ -1,15 +1,11 @@
 #pragma once
 
+#include <csics/linalg/Concepts.hpp>
+
 #include <concepts>
 #include <cstddef>
 #include <tuple>
 namespace csics::linalg {
-
-template <typename T>
-concept VecPrimitive = std::is_arithmetic_v<T>;
-
-template <typename T>
-concept ScalarLike = VecPrimitive<T>;  // maybe expanded later
 
 template <VecPrimitive T, std::size_t N>
 class Vec {
@@ -128,38 +124,6 @@ class Vec4 {
     T data_[4];
 };
 
-template <typename T>
-concept Vec2Like = requires(T a) {
-    typename T::value_type;
-    { a.x() } -> std::same_as<typename T::value_type>;
-    { a.y() } -> std::same_as<typename T::value_type>;
-} && T::size_v == std::integral_constant<std::size_t, 2>{};
-
-template <typename T>
-concept Vec3Like = requires(T a) {
-    typename T::value_type;
-    { a.x() } -> std::same_as<typename T::value_type>;
-    { a.y() } -> std::same_as<typename T::value_type>;
-    { a.z() } -> std::same_as<typename T::value_type>;
-} && T::size_v == std::integral_constant<std::size_t, 3>{};
-
-template <typename T>
-concept Vec4Like = requires(T a) {
-    typename T::value_type;
-    { a.x() } -> std::same_as<typename T::value_type>;
-    { a.y() } -> std::same_as<typename T::value_type>;
-    { a.z() } -> std::same_as<typename T::value_type>;
-    { a.w() } -> std::same_as<typename T::value_type>;
-} && T::size_v == std::integral_constant<std::size_t, 4>{};
-
-template <typename T>
-concept StaticVecLike =
-    (Vec2Like<T> || Vec3Like<T> || Vec4Like<T>) && requires { T::size; };
-
-template <typename T, typename U>
-concept VecCompatible =
-    StaticVecLike<T> && StaticVecLike<U> && T::size == U::size &&
-    std::same_as<typename T::value_type, typename U::value_type>;
 
 static_assert(Vec2Like<Vec2<float>>);
 static_assert(!Vec2Like<Vec3<float>>);
