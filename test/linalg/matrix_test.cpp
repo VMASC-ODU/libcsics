@@ -5,8 +5,8 @@
 TEST(CSICSLinAlgTests, MatrixBasicTest) {
     using namespace csics::linalg;
 
-    Matrix<double, 2, 2> m1{1.0, 2.0, 3.0, 4.0};
-    Matrix<double, 2, 2> m2{5.0, 6.0, 7.0, 8.0};
+    Matrix<double, 2, 2> m1{{1.0, 2.0}, {3.0, 4.0}};
+    Matrix<double, 2, 2> m2{{5.0, 6.0}, {7.0, 8.0}};
 
     ASSERT_NE(m1, m2);
     static_assert(
@@ -26,4 +26,9 @@ TEST(CSICSLinAlgTests, MatrixBasicTest) {
     auto m7 = m1 / 2.0;
     Matrix<double, 2, 2> expected_div{{0.5, 1.0}, {1.5, 2.0}};
     ASSERT_EQ(m7, expected_div);
+
+    Matrix<double, 2,2> m8 = m1 * m2;
+    Matrix<double, 2, 2> expected_mul_mat{{19.0, 22.0}, {43.0, 50.0}};
+    ASSERT_EQ(m8, expected_mul_mat);
+
 };

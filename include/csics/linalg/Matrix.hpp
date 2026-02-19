@@ -92,14 +92,12 @@ class Matrix {
     template <StaticVecLike V, std::size_t... Is>
     constexpr auto mat_get_row_impl(std::size_t i,
                                     std::index_sequence<Is...>) const noexcept {
-        return row_vec{
-            (data_[calculate_index(i, Is)])...};
+        return row_vec{(data_[calculate_index(i, Is)])...};
     }
     template <StaticVecLike V, std::size_t... Is>
     constexpr auto mat_get_col_impl(std::size_t j,
                                     std::index_sequence<Is...>) const noexcept {
-        return col_vec{
-            (data_[calculate_index(Is, j)])...};
+        return col_vec{(data_[calculate_index(Is, j)])...};
     }
 };
 
@@ -172,29 +170,35 @@ constexpr auto operator/(Mat&& m, S s) {
 // require more careful handling of indices and dimensions.
 
 template <SmallMatrix MatA, SmallMatrix MatB, std::size_t I, std::size_t J,
-          std::size_t K, std::size_t... Ks>
+          std::size_t K, std::size_t... Ks, typename Mac = ::csics::linalg::Mac>
 constexpr auto mat_mul_element(
     MatA&& a, MatB&& b,
     std::index_sequence<Ks...>) {  // computes the (I,J) element of the product
                                    // of a and b
-    using T = typename MatA::value_type;
+    using Tp = std::remove_cvref_t<MatA>;
+    using T = typename Tp::value_type;
     T result = T{};
-    (mac(result, a(I, Ks), b(Ks, J)), ...);  // dot product of Ith row of a and
-                                             // Jth column of b
+    (Mac::apply(result, a(I, Ks), b(Ks, J)), ...);  // dot product of Ith row of
+                                                    // a and Jth column of b
     return result;
 }
 
-template <SmallMatrix MatA, SmallMatrix MatB, std::size_t J, std::size_t K,
-          std::size_t... Is, std::size_t... Js>
-constexpr auto mat_mul_impl(MatA&& a, MatB&& b, std::index_sequence<Is...>) {
-    Matrix<typename MatA::value_type, MatA::rows_v, MatB::cols_v> result;
+template <SmallMatrix MatA, SmallMatrix MatB, std::size_t... Is,
+          std::size_t... Js>
+constexpr auto mat_mul_impl(MatA&& a, MatB&& b, std::index_sequence<Is...>,
+                            std::index_sequence<Js...>) {
+    using TpA = std::remove_cvref_t<MatA>;
+    using TpB = std::remove_cvref_t<MatB>;
+    using T = typename TpA::value_type;
+    Matrix<T, TpA::rows_v, TpB::cols_v> result;
     (
         [&]() {
             constexpr std::size_t I = Is;
             ((result(I, Js) =
                   mat_mul_element<MatA, MatB, I, Js,
-                                  MatA::cols_v>(  // computes Jth column
-                      a, b, std::make_index_sequence<MatA::cols_v>{})),
+                                  TpA::cols_v>(  // computes Jth column
+                      std::forward<MatA>(a), std::forward<MatB>(b),
+                      std::make_index_sequence<TpA::cols_v>{})),
              ...);
         }(),
         ...);  // over all rows
@@ -204,8 +208,12 @@ constexpr auto mat_mul_impl(MatA&& a, MatB&& b, std::index_sequence<Is...>) {
 template <SmallMatrix MatA, SmallMatrix MatB>
     requires MatrixCompatible<MatA, MatB>
 constexpr auto operator*(MatA&& a, MatB&& b) {
-    return mat_mul_impl(std::forward<MatA>(a), std::forward<MatB>(b),
-                        std::make_index_sequence<MatA::rows_v>{});
+    using TpA = std::remove_cvref_t<MatA>;
+    using TpB = std::remove_cvref_t<MatB>;
+    return mat_mul_impl(
+        std::forward<MatA>(a), std::forward<MatB>(b),
+        std::make_index_sequence<TpA::rows_v>{},
+        std::make_index_sequence<TpB::cols_v>{});
 }
 
 template <SmallMatrix Mat>
