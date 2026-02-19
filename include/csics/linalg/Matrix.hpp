@@ -4,8 +4,10 @@
 #include <concepts>
 #include <cstddef>
 #include <utility>
+#include <csics/linalg/Concepts.hpp>
+#include <csics/linalg/Vec.hpp>
+#include <csics/linalg/Ops.hpp>
 
-#include "csics/linalg/Vec.hpp"
 namespace csics::linalg {
 
 template <typename T, std::size_t Rows, std::size_t Cols>
@@ -84,23 +86,6 @@ class Matrix {
     }
 };
 
-template <typename Mat>
-concept SmallMatrix = Mat::rows_v <= 4 && Mat::cols_v <= 4;
-
-template <typename Mat>
-concept SquareMatrix = Mat::rows_v == Mat::cols_v;
-
-template <typename Mat>
-concept SmallSquareMatrix = SmallMatrix<Mat> && SquareMatrix<Mat>;
-
-template <typename MatA, typename MatB>
-concept MatrixCompatible =
-    MatA::cols_v == MatB::rows_v && MatA::value_type == MatB::value_type;
-
-template <typename Mat>
-concept Matrix2x2 = Mat::rows_v == 2 && Mat::cols_v == 2;
-template <typename Mat>
-concept Matrix3x3 = Mat::rows_v == 3 && Mat::cols_v == 3;
 
 template <SmallMatrix Mat, std::size_t... Is>
 constexpr auto mat_add_impl(Mat&& a, Mat&& b, std::index_sequence<Is...>) {
@@ -162,8 +147,11 @@ constexpr auto mat_mul_element(
     MatA&& a, MatB&& b,
     std::index_sequence<Ks...>) {  // computes the (I,J) element of the product
                                    // of a and b
-    return std::array<typename MatA::value_type, K>{
-        (a.template get<I, Ks>() * b.template get<Ks, J>())...};
+    using T = typename MatA::value_type;
+    T result = T{};
+    (mac(result, a(I, Ks), b(Ks, J)), ...);  // dot product of Ith row of a and
+                                           // Jth column of b
+    return result;
 }
 
 template <SmallMatrix MatA, SmallMatrix MatB, std::size_t J, std::size_t K,

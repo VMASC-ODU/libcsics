@@ -55,4 +55,22 @@ concept VecCompatible =
     StaticVecLike<T> && StaticVecLike<U> && T::size == U::size &&
     std::same_as<typename T::value_type, typename U::value_type>;
 
+template <typename Mat>
+concept SmallMatrix = Mat::rows_v <= 4 && Mat::cols_v <= 4;
+
+template <typename Mat>
+concept SquareMatrix = Mat::rows_v == Mat::cols_v;
+
+template <typename Mat>
+concept SmallSquareMatrix = SmallMatrix<Mat> && SquareMatrix<Mat>;
+
+template <typename MatA, typename MatB>
+concept MatrixCompatible =
+    MatA::cols_v == MatB::rows_v && MatA::value_type == MatB::value_type;
+
+template <typename Mat>
+concept Matrix2x2 = Mat::rows_v == 2 && Mat::cols_v == 2;
+template <typename Mat>
+concept Matrix3x3 = Mat::rows_v == 3 && Mat::cols_v == 3;
+
 };  // namespace csics::linalg

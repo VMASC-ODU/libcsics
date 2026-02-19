@@ -10,33 +10,73 @@ namespace csics::linalg {
 class Mac {
    public:
     template <typename T>
-    constexpr auto operator()(const T& a, const T& b,
-                              const T& c) const noexcept {
+    inline constexpr void operator()(T& a, const T& b,
+                                     const T& c) const noexcept {
         return apply(a, b, c);
     }
 
     template <ScalarLike Scalar>
-    static auto apply(const Scalar& a, const Scalar& b, const Scalar& c) {
-        return a * b + c;
+    inline constexpr static void apply(Scalar& a, const Scalar& b,
+                                       const Scalar& c) noexcept {
+        if constexpr (std::floating_point<Scalar>) {
+            a = std::fma(b, c, a);
+        } else {
+            a += b * c;
+        }
     }
 
-    template <FloatScalarLike Scalar>
-    static auto apply(const Scalar& a, const Scalar& b, const Scalar& c) {
-        return std::fma(a, b, c);
+    template <ComplexLike ComplexU>
+    inline constexpr static void apply(ComplexU& a, const ComplexU& b,
+                                       const ComplexU& c) noexcept {
+        auto i = a.imag();
+        auto r = a.real();  // store old accumulator
+        a.real() = std::fma(b.real(), c.real(), r) - b.imag() * c.imag();
+        a.imag() = std::fma(b.real(), c.imag(), i) + b.imag() * c.real();
     }
 };
 
 constexpr Mac mac;
 
+class MacConj {
+   public:
+    template <typename T>
+    inline constexpr void operator()(T& a, const T& b,
+                                     const T& c) const noexcept {
+        return apply(a, b, c);
+    }
+
+    template <ScalarLike Scalar>
+    inline constexpr static void apply(Scalar& a, const Scalar& b,
+                                       const Scalar& c) noexcept {
+        a += b * c;
+    }
+
+    template <FloatScalarLike Scalar>
+    inline constexpr static void apply(Scalar& a, const Scalar& b,
+                                       const Scalar& c) noexcept {
+        a = std::fma(b, c, a);
+    }
+
+    template <ComplexLike ComplexU>
+        requires std::floating_point<typename ComplexU::value_type>
+    inline constexpr static void apply(ComplexU& a, const ComplexU& b,
+                                       const ComplexU& c) noexcept {
+        auto i = a.i;
+        auto r = a.r;  // store old accumulator
+        a.r = std::fma(b.r, c.r, r) + b.i * c.i;
+        a.i = std::fma(b.r, -c.i, i) + b.i * c.r;
+    }
+};
+
 class Dot {
    public:
     template <typename T>
-    constexpr auto operator()(const T& a, const T& b) const noexcept {
+    inline constexpr auto operator()(const T& a, const T& b) const noexcept {
         return apply(a, b);
     }
 
     template <StaticVecLike VecU>
-    static auto apply(const VecU& a, const VecU& b) {
+    inline constexpr static auto apply(const VecU& a, const VecU& b) {
         return std::apply(
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 return ((a.template get<Is>(a) * b.template get<Is>(b)) + ...);
@@ -45,30 +85,34 @@ class Dot {
     };
 };
 
+constexpr Dot dot;
+
 class Cross {
    public:
     template <typename T>
-    constexpr auto operator()(T&& a, T&& b) const noexcept {
+    inline constexpr auto operator()(T&& a, T&& b) const noexcept {
         return apply(std::forward<T>(a), std::forward<T>(b));
     }
 
     template <Vec3Like Vec3U>
-    static auto apply(Vec3U&& a, Vec3U&& b) {
+    inline constexpr static auto apply(Vec3U&& a, Vec3U&& b) noexcept {
         return Vec3U(a.y() * b.z() - a.z() * b.y(),
                      a.z() * b.x() - a.x() * b.z(),
                      a.x() * b.y() - a.y() * b.x());
     };
 };
 
+constexpr Cross cross;
+
 class Mag {
    public:
     template <typename T>
-    constexpr auto operator()(const T& v) const noexcept {
+    inline constexpr auto operator()(const T& v) const noexcept {
         return apply(v);
     }
 
     template <StaticVecLike VecU>
-    static auto apply(const VecU& v) {
+    inline constexpr static auto apply(const VecU& v) noexcept {
         return std::sqrt(std::apply(
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 return ((v.template get<Is>(v) * v.template get<Is>(v)) + ...);
@@ -76,16 +120,18 @@ class Mag {
             std::make_index_sequence<VecU::size_v>{}));
     }
 };
+
+constexpr Mag mag;
 
 class Abs {
    public:
     template <typename T>
-    constexpr auto operator()(const T& v) const noexcept {
+    inline constexpr auto operator()(const T& v) const noexcept {
         return apply(v);
     }
 
     template <StaticVecLike VecU>
-    static auto apply(const VecU& v) {
+    inline constexpr static auto apply(const VecU& v) noexcept {
         return std::sqrt(std::apply(
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 return ((v.template get<Is>(v) * v.template get<Is>(v)) + ...);
@@ -94,20 +140,21 @@ class Abs {
     }
 };
 
+constexpr Abs abs;
+
 class Conj {
    public:
     template <typename T>
-    constexpr auto operator()(const T& v) const noexcept {
+    inline constexpr auto operator()(const T& v) const noexcept {
         return apply(v);
     }
 
     template <ComplexLike ComplexU>
-    static auto apply(const ComplexU& c) {
+    inline constexpr static auto apply(const ComplexU& c) noexcept {
         return ComplexU(c.real(), -c.imag());
     }
 };
 
-constexpr Dot dot;
-constexpr Cross cross;
+constexpr Conj conj;
 
 };  // namespace csics::linalg

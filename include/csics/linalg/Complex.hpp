@@ -14,8 +14,8 @@ class Complex {
     constexpr Complex() = default;
     constexpr Complex(T real, T imag) : real_(real), imag_(imag) {}
 
-    constexpr T real() const noexcept { return real_; }
-    constexpr T imag() const noexcept { return imag_; }
+    constexpr const T real() const noexcept { return real_; }
+    constexpr const T imag() const noexcept { return imag_; }
     constexpr T& real() noexcept { return real_; }
     constexpr T& imag() noexcept { return imag_; }
 
