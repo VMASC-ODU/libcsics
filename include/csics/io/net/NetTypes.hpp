@@ -7,15 +7,7 @@
 #include <type_traits>
 namespace csics::io::net {
 
-enum class EndpointType : uint8_t { TCP = 0, UDP = 1, MQTT = 2 };
-using TypeErasedParams = void;
-struct TypeErasedEndpoint {
-    void* impl;
-    uint8_t type;
-
-    using ConnectionParams = TypeErasedParams;
-};
-
+enum class NetStatus { Success, Timeout, Disconnected, Error };
 
 using Port = uint16_t;
 
@@ -118,15 +110,9 @@ class URI {
 
 enum class PollStatus { Ready, Timeout, Disconnected, Error };
 
-inline PollStatus poll_endpoint(const TypeErasedEndpoint* endpoint, int timeoutMs);
-inline size_t poll_endpoints(const TypeErasedEndpoint* endpoints, size_t size,
-                             PollStatus* status_array, const size_t poll_size,
-                             int timeoutMs);
-
 template <typename T>
+    requires std::is_integral_v<T>
 constexpr T byte_swap(T val) {
-    static_assert(std::is_integral_v<T>, "byte_swap requires an integral type");
-
     if constexpr (sizeof(T) == 1) {
         return val;
     } else if constexpr (sizeof(T) == 2) {

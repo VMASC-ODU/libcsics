@@ -9,7 +9,8 @@
 namespace csics {
 
 template <typename T>
-concept BufferType = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
+concept BufferType =
+    std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
 
 class BufferView {
    public:
@@ -18,19 +19,24 @@ class BufferView {
     using const_iterator = const char*;
 
     const char* data() const noexcept { return buf_; }
-     std::size_t size() const noexcept { return size_; }
+    std::size_t size() const noexcept { return size_; }
     char* data() noexcept { return buf_; }
 
-    const uint8_t* u8() const noexcept { return reinterpret_cast<const uint8_t*>(buf_); }
+    const uint8_t* u8() const noexcept {
+        return reinterpret_cast<const uint8_t*>(buf_);
+    }
     uint8_t* u8() noexcept { return reinterpret_cast<uint8_t*>(buf_); }
 
-    const unsigned char* uc() const noexcept { return reinterpret_cast<const unsigned char*>(buf_); }
-    unsigned char* uc() noexcept { return reinterpret_cast<unsigned char*>(buf_); }
+    const unsigned char* uc() const noexcept {
+        return reinterpret_cast<const unsigned char*>(buf_);
+    }
+    unsigned char* uc() noexcept {
+        return reinterpret_cast<unsigned char*>(buf_);
+    }
 
     bool empty() const noexcept { return size_ == 0; }
 
-    BufferView subview(std::size_t offset,
-                          std::size_t length) const noexcept {
+    BufferView subview(std::size_t offset, std::size_t length) const noexcept {
         if (offset >= size_) {
             return BufferView(nullptr, 0);
         }
@@ -143,7 +149,7 @@ class BufferView {
         return *this;
     }
 
-    template<typename T>
+    template <typename T>
         requires BufferType<T>
     BufferView(std::vector<T>& vec) noexcept {
         if (vec.empty()) {
@@ -171,7 +177,8 @@ class TypedView {
         if (data == nullptr || size == 0 || size % sizeof(T) != 0) {
             return TypedView(nullptr, 0);
         }
-        return TypedView(reinterpret_cast<T*>(const_cast<void*>(data)), size / sizeof(T));
+        return TypedView(reinterpret_cast<T*>(const_cast<void*>(data)),
+                         size / sizeof(T));
     }
 
     template <typename U>
@@ -179,12 +186,14 @@ class TypedView {
         if (size_ % sizeof(U) != 0) {
             return TypedView<U>();
         }
-        return TypedView<U>(reinterpret_cast<U*>(buf_), size_ * sizeof(T) / sizeof(U));
+        return TypedView<U>(reinterpret_cast<U*>(buf_),
+                            size_ * sizeof(T) / sizeof(U));
     }
 
     template <typename U>
     operator std::span<U>() const noexcept {
-        return std::span<U>(reinterpret_cast<U*>(buf_), size_ * sizeof(T) / sizeof(U));
+        return std::span<U>(reinterpret_cast<U*>(buf_),
+                            size_ * sizeof(T) / sizeof(U));
     }
 
     const T* data() const noexcept { return buf_; }
@@ -265,7 +274,7 @@ class TypedView {
     }
 
     TypedView operator()(std::size_t offset,
-                          std::size_t length) const noexcept {
+                         std::size_t length) const noexcept {
         return subview(offset, length);
     }
 
@@ -388,8 +397,7 @@ class Buffer {
 
     BufferView view() const noexcept { return BufferView(buf_, size_); }
 
-    BufferView subview(std::size_t offset,
-                          std::size_t length) const noexcept {
+    BufferView subview(std::size_t offset, std::size_t length) const noexcept {
         if (offset >= size_) {
             return BufferView();
         }
@@ -426,7 +434,7 @@ class Buffer {
     }
 
     BufferView operator()(std::size_t offset,
-                             std::size_t length) const noexcept {
+                          std::size_t length) const noexcept {
         return subview(offset, length);
     }
 
@@ -453,4 +461,85 @@ class Buffer {
     }
 };
 
-};  // namespace csics::io
+class StringView {
+   public:
+    using value_type = char;
+    using iterator = const char*;
+    using const_iterator = const char*;
+
+    const char* data() const noexcept { return buf_; }
+    std::size_t size() const noexcept { return size_; }
+
+    bool empty() const noexcept { return size_ == 0; }
+
+    StringView(const char* str) : buf_(str), size_(std::strlen(str)) {}
+    StringView(const char* str, std::size_t size) : buf_(str), size_(size) {}
+
+    StringView subview(std::size_t offset, std::size_t length) const noexcept {
+        if (offset >= size_) {
+            return StringView(nullptr, 0);
+        }
+        if (offset + length > size_) {
+            length = size_ - offset;
+        }
+        return StringView(buf_ + offset, length);
+    }
+
+    StringView head(std::size_t length) const noexcept {
+        if (length > size_) {
+            length = size_;
+        }
+        return StringView(buf_, length);
+    }
+
+    StringView tail(std::size_t length) const noexcept {
+        if (length > size_) {
+            length = size_;
+        }
+        return StringView(buf_ + (size_ - length), length);
+    }
+
+    operator bool() const noexcept { return buf_ != nullptr && size_ > 0; }
+
+    bool operator==(const StringView& other) const noexcept {
+        return buf_ == other.buf_ && size_ == other.size_;
+    }
+
+    bool operator!=(const StringView& other) const noexcept {
+        return !(*this == other);
+    }
+
+    StringView operator+(std::size_t offset) const noexcept {
+        if (offset > size_) {
+            return StringView(nullptr, 0);
+        }
+        return StringView(buf_ + offset, size_ - offset);
+    }
+
+    StringView& operator+=(std::size_t offset) noexcept {
+        if (offset > size_) {
+            buf_ = nullptr;
+            size_ = 0;
+        } else {
+            buf_ += offset;
+            size_ -= offset;
+        }
+        return *this;
+    }
+
+    char operator[](std::size_t index) const noexcept { return buf_[index]; }
+
+    StringView operator()(std::size_t offset,
+                          std::size_t length) const noexcept {
+        return subview(offset, length);
+    }
+
+    const char* begin() const noexcept { return buf_; }
+    const char* end() const noexcept { return buf_ + size_; }
+
+   private:
+    const char* buf_;
+    std::size_t size_;
+};
+
+};  // namespace csics

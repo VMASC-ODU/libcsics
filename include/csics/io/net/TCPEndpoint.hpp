@@ -1,8 +1,7 @@
 #pragma once
-#include <csics/io/net/stream/Stream.hpp>
-#include <vector>
 
 #include <csics/io/net/NetTypes.hpp>
+#include <csics/Buffer.hpp>
 
 namespace csics::io::net {
 class TCPEndpoint {
@@ -16,10 +15,10 @@ class TCPEndpoint {
     TCPEndpoint(TCPEndpoint&& other) noexcept;
     TCPEndpoint& operator=(TCPEndpoint&& other) noexcept;
 
-    StreamResult send(BufferView data);
-    StreamResult recv(BufferView buffer);
+    NetStatus send(BufferView data);
+    NetStatus recv(BufferView buffer);
     template <typename T>
-    StreamResult connect(T&& addr) {
+    NetStatus connect(T&& addr) {
         static_assert(std::is_convertible_v<T, SockAddr>,
                       "Address type must be convertible to SockAddr for "
                       "TCPEndpoint connection");
@@ -34,6 +33,6 @@ class TCPEndpoint {
     struct Internal;
     Internal* internal_;
 
-    StreamResult connect_(SockAddr addr);
+    NetStatus connect_(SockAddr addr);
 };
 };  // namespace csics::io::net
