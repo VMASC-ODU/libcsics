@@ -1,11 +1,10 @@
 #pragma once
 
+#include <cmath>
 #include <csics/linalg/Concepts.hpp>
 #include <tuple>
-#include <cmath>
 
 namespace csics::linalg {
-
 
 template <typename T>
 class Complex {
@@ -29,6 +28,10 @@ class Complex {
 
 static_assert(ComplexLike<Complex<float>>);
 
+}  // namespace csics
+
+// Operator implementations
+namespace csics::linalg {
 template <ComplexLike T>
 constexpr inline T operator+(T&& a, T&& b) {
     return T(a.real() + b.real(), a.imag() + b.imag());
@@ -55,22 +58,22 @@ constexpr inline T operator/(const T& a, const T& b) {
 template <ComplexLike T>
 constexpr inline T operator*(const T& c, const typename T::value_type& s) {
     return T(c.real() * s, c.imag() * s);
-};
+}
 
 template <ComplexLike T>
 constexpr inline T operator*(const typename T::value_type& s, const T& c) {
     return c * s;
-};
+}
 
 template <ComplexLike T>
 constexpr inline T operator/(const T& c, const typename T::value_type& s) {
     return T(c.real() / s, c.imag() / s);
-};
+}
 
 template <ComplexLike T>
 constexpr inline T operator/(const typename T::value_type& s, const T& c) {
     return T(s / c.real(), -s / c.imag());
-};
+}
 
 template <ComplexLike T>
 constexpr inline bool operator==(const T& a, const T& b) {
@@ -85,24 +88,24 @@ constexpr inline bool operator!=(const T& a, const T& b) {
 template <ComplexLike T>
 constexpr inline bool operator<(const T& a, const T& b) {
     return std::tie(a.real(), a.imag()) < std::tie(b.real(), b.imag());
-};
+}
 
 template <ComplexLike T>
 constexpr inline bool operator>(const T& a, const T& b) {
     return std::tie(a.real(), a.imag()) > std::tie(b.real(), b.imag());
-};
+}
 
 template <ComplexLike T>
 constexpr inline bool operator<=(const T& a, const T& b) {
     return !(a > b);
-};
+}
 
 template <ComplexLike T>
 constexpr inline bool operator>=(const T& a, const T& b) {
     return !(a < b);
-};
+}
 
-};  // namespace csics::linalg
+};  // namespace csics
 
 // std specializations
 namespace std {

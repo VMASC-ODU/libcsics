@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <csics/queue/SPSCQueue.hpp>
+#include <csics/csics.hpp>
 #include <cstring>
 #include <random>
 #include <thread>

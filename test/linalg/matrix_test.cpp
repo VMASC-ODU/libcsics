@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <csics/linalg/Matrix.hpp>
+#include <csics/csics.hpp>
 
 TEST(CSICSLinAlgTests, MatrixBasicTest) {
     using namespace csics::linalg;

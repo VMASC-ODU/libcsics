@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <csics/linalg/Vec.hpp>
+#include <csics/csics.hpp>
 
 
 TEST(CSICSLinAlgTests, Vec2BasicTest) {

@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <zlib.h>
 
-#include <csics/io/compression/Compressor.hpp>
+#include <csics/csics.hpp>
 
 #include "../test_utils.hpp"
 #include "gmock/gmock.h"

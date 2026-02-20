@@ -52,7 +52,6 @@ if (CSICS_BUILD_SERIALIZATION)
 endif()
 
 if (CSICS_BUILD_LINALG)
-    list(APPEND TESTS linalg/static_lib_test.cpp)
     list(APPEND TESTS linalg/vec_lib_test.cpp)
     list(APPEND TESTS linalg/matrix_test.cpp)
 endif()

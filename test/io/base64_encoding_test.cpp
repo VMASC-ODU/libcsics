@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <openssl/evp.h>
 
-#include <csics/io/encdec/Base64.hpp>
+#include <csics/csics.hpp>
 #include <fstream>
 #include <random>
 #include <vector>

@@ -3,7 +3,16 @@ project(csics VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+option(CSICS_DEV "Enable development mode with debug settings" OFF)
+
+if (CSICS_DEV)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+else()
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -23,7 +32,17 @@ option(CSICS_USE_ZLIB "Use the ZLIB library for compression support" ${CSICS_BUI
 option(CSICS_ENABLE_TESTS "Enable building tests" ${CSICS_BUILD_ALL})
 
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(CSICS_COMPILE_DEFINITIONS)
+set(CSICS_COMPILE_DEFINITIONS
+        $<$<BOOL:${CSICS_USE_UHD}>:CSICS_USE_UHD>
+        $<$<BOOL:${CSICS_USE_ZSTD}>:CSICS_USE_ZSTD>
+        $<$<BOOL:${CSICS_USE_ZLIB}>:CSICS_USE_ZLIB>
+        $<$<BOOL:${CSICS_DEV}>:CSICS_DEV>
+        $<$<BOOL:${CSICS_BUILD_QUEUE}>:CSICS_BUILD_QUEUE>
+        $<$<BOOL:${CSICS_BUILD_RADIO}>:CSICS_BUILD_RADIO>
+        $<$<BOOL:${CSICS_BUILD_IO}>:CSICS_BUILD_IO>
+        $<$<BOOL:${CSICS_BUILD_SERIALIZATION}>:CSICS_BUILD_SERIALIZATION>
+        $<$<BOOL:${CSICS_BUILD_LINALG}>:CSICS_BUILD_LINALG>
+)
 include(cmake/deps.cmake)
 
 set(COMPONENTS CSICS::core)
@@ -64,12 +83,21 @@ if (CSICS_BUILD_SERIALIZATION)
     list(APPEND COMPONENTS CSICS::serialization)
 endif()
 
+if (CSICS_DEV)
+    add_library(_include_anchors OBJECT src/_dev_anchor.cpp)
+    target_compile_definitions(_include_anchors PUBLIC ${CSICS_COMPILE_DEFINITIONS})
+    target_compile_options(_include_anchors PUBLIC ${CSICS_COMPILE_FLAGS})
+    target_link_options(_include_anchors PUBLIC ${CSICS_LINKER_FLAGS})
+    target_include_directories(_include_anchors PUBLIC ${INCLUDE_DIR})
+endif()
+
 add_subdirectory(src)
 
 add_library(CSICS INTERFACE)
 target_include_directories(CSICS INTERFACE ${INCLUDE_DIR})
 target_link_libraries(CSICS INTERFACE ${COMPONENTS} ${CSICS_DEBUG_LIBS})
 target_compile_options(CSICS INTERFACE ${CSICS_COMPILE_FLAGS})
+target_compile_definitions(CSICS INTERFACE ${CSICS_COMPILE_DEFINITIONS})
 target_link_options(CSICS INTERFACE ${CSICS_LINKER_FLAGS})
 
 

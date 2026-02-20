@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
-#include <csics/radio/Radio.hpp>
-#include <csics/radio/RadioRx.hpp>
+#include <csics/csics.hpp>
 
 
 static inline std::unique_ptr<csics::radio::IRadioRx> create_usrp_radio() {

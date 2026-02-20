@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <zstd.h>
 
-#include <csics/io/compression/Compressor.hpp>
+#include <csics/csics.hpp>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>

@@ -32,8 +32,8 @@ inline StreamResult connect_stream(Endpoint* endpoint,
 };
 
 template <>
-inline StreamResult connect_stream<TypeErasedEndpoint, ConnectionParams>(
-    TypeErasedEndpoint* endpoint, ConnectionParams* parameter) {
+inline StreamResult connect_stream<TypeErasedEndpoint, TypeErasedParams>(
+    TypeErasedEndpoint* endpoint, TypeErasedParams* parameter) {
     switch (static_cast<EndpointType>(endpoint->type)) {
         case EndpointType::TCP:
             return connect_stream(

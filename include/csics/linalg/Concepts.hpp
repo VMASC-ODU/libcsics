@@ -2,6 +2,7 @@
 #include <concepts>
 
 namespace csics::linalg {
+
 template <typename T>
 concept ComplexLikeImpl = requires(T a) {
     typename T::value_type;
@@ -15,7 +16,6 @@ concept ComplexLike = ComplexLikeImpl<std::remove_cvref_t<T>>;
 
 template <typename T>
 concept ComplexPrimitive = std::is_arithmetic_v<T> && std::is_signed_v<T>;
-
 template <typename T>
 concept VecPrimitive = std::is_arithmetic_v<T>;
 

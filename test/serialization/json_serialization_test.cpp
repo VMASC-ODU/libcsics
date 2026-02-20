@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <csics/serialization/JSONSerializer.hpp>
+#include <csics/csics.hpp>
 
 class TestClass {
    private:

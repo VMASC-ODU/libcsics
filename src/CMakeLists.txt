@@ -9,6 +9,7 @@ if (CSICS_BUILD_QUEUE)
     add_library(CSICS::queue ALIAS queue)
     target_compile_options(queue PRIVATE ${CSICS_COMPILE_FLAGS})
     target_link_options(queue PRIVATE ${CSICS_LINKER_FLAGS})
+    target_compile_definitions(queue PRIVATE ${CSICS_COMPILE_DEFINITIONS})
 endif()
 
 if (CSICS_BUILD_RADIO)
