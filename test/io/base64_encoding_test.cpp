@@ -19,7 +19,7 @@ TEST(CSICSEncDecTests, Base64EncodingTest) {
     std::vector<uint8_t> input_data = {'M', 'a', 'n'};
     BufferView input_buffer(input_data.data(), input_data.size());
     std::vector<uint8_t> output_data(4);
-    BufferView output_buffer(output_data.data(), output_data.size());
+    MutableBufferView output_buffer(output_data);
     EXPECT_EQ(output_buffer.size(), 4);
     EXPECT_EQ(input_buffer.size(), 3);
     EncodingResult result = encoder.encode(input_buffer, output_buffer);
@@ -41,7 +41,7 @@ TEST(CSICSEncDecTests, Base64EncodingWithPaddingTest) {
     std::vector<uint8_t> input_data = {'M', 'a'};
     BufferView input_buffer(input_data.data(), input_data.size());
     std::vector<uint8_t> output_data(4);
-    BufferView output_buffer(output_data.data(), output_data.size());
+    MutableBufferView output_buffer(output_data.data(), output_data.size());
     EXPECT_EQ(output_buffer.size(), 4);
     EXPECT_EQ(input_buffer.size(), 2);
     EncodingResult result = encoder.encode(input_buffer, output_buffer);
@@ -62,7 +62,7 @@ TEST(CSICSEncDecTests, Base64EncodingWithPaddingTest) {
 
     input_data = {'M'};
     input_buffer = BufferView(input_data.data(), input_data.size());
-    output_buffer = BufferView(output_data.data(), output_data.size());
+    output_buffer = MutableBufferView(output_data.data(), output_data.size());
     EXPECT_EQ(output_buffer.size(), 4);
     EXPECT_EQ(input_buffer.size(), 1);
     result = encoder.encode(input_buffer, output_buffer);
@@ -86,7 +86,7 @@ TEST(CSICSEncDecTests, Base64EncodingFuzzTest) {
     using namespace csics;
     Base64Encoder encoder;
     BufferView input;
-    BufferView output;
+    MutableBufferView output;
     
     for (size_t i = 0; i < 10000; i++) {
         auto rand_size = (std::rand() % (int)1000) + 1;  //(size_t)4e6;
@@ -94,7 +94,7 @@ TEST(CSICSEncDecTests, Base64EncodingFuzzTest) {
         std::vector<uint8_t> output_buf(4 * ((rand_size + 2) / 3) + 16, 0); // align to 16 bytes for EVP on apple silicon
         input = BufferView(generated_bytes);
         ASSERT_TRUE(input);
-        output = BufferView(output_buf);
+        output = MutableBufferView(output_buf);
         ASSERT_TRUE(output);
         ASSERT_EQ(output.size(), output_buf.size());
         auto out_before = output;

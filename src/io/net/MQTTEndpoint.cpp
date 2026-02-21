@@ -1,5 +1,4 @@
 
-#pragma once
 #include <MQTTAsync.h>
 
 #include <chrono>
@@ -11,12 +10,12 @@
 
 namespace csics::io::net {
 
-MQTTMessage::MQTTMessage() : payload_(), topic_() {};
+MQTTMessage::MQTTMessage() : payload_(), topic_(), internal_msg_(nullptr) {};
 MQTTMessage::~MQTTMessage() {
     if (internal_msg_) {
         MQTTAsync_message* msg = static_cast<MQTTAsync_message*>(internal_msg_);
         MQTTAsync_freeMessage(&msg);
-        MQTTAsync_free(const_cast<char*>(topic_.data())); 
+        MQTTAsync_free(const_cast<char*>(topic_.data()));
     };
 };
 
@@ -33,8 +32,8 @@ struct MQTTEndpoint::Internal {
     String client_id;
 };
 
-void conn_lost_cb(void*, char*) {
-    // Handle connection lost
+void conn_lost_cb(void* ctx, char* cause) {
+    MQTTEndpoint::conn_lost(ctx, cause);
 };
 
 int message_arrived_cb(void* context, char* topicName, int topicLen,
@@ -43,10 +42,12 @@ int message_arrived_cb(void* context, char* topicName, int topicLen,
 };
 
 void delivery_complete_cb(void* context, MQTTAsync_token token) {
-    // Handle message delivery completion
+    MQTTEndpoint::dlv_cmplt(context, token);
 };
 
-MQTTEndpoint::MQTTEndpoint(BufferView client_id) : internal_(new Internal()) {};
+MQTTEndpoint::MQTTEndpoint(StringView client_id) : internal_(new Internal()) {
+    internal_->client_id = String(client_id);
+};
 MQTTEndpoint::~MQTTEndpoint() { delete internal_; };
 
 MQTTEndpoint::MQTTEndpoint(MQTTEndpoint&& other) noexcept
@@ -112,28 +113,30 @@ NetStatus MQTTEndpoint::connect(const URI& broker_uri) {
     return NetStatus::Success;
 }
 
-void MQTTEndpoint::conn_lost(void* context, char* cause) {
-    // Handle connection lost
+void MQTTEndpoint::conn_lost(void*, char*) {
+    // TODO: Handle connection lost
 }
 
 void MQTTEndpoint::dlv_cmplt(void* context, int token) {
     auto* internal = static_cast<MQTTEndpoint::Internal*>(context);
-    std::erase_if(internal->pending_messages,
-                  [token](const auto& entry) { return std::get<1>(entry) == token; });
-
+    std::erase_if(internal->pending_messages, [token](const auto& entry) {
+        return std::get<1>(entry) == token;
+    });
 }
 
 int MQTTEndpoint::msg_arvd(void* context, char* topicName, int topicLen,
-                             void* message_) {
+                           void* message_) {
     auto* internal = static_cast<MQTTEndpoint::Internal*>(context);
 
     MQTTMessage msg;
     msg.internal_msg_ = message_;
     msg.topic_ = StringView(topicName, topicLen);
 
+    auto key = std::string(topicName, topicLen);
+    internal->topic_queues.emplace(key, 1024);
+
     auto ret =
-        internal->topic_queues[std::string(topicName, topicLen)].try_push(
-            std::move(msg));
+        internal->topic_queues.find(key)->second.try_push(std::move(msg));
     if (ret != queue::SPSCError::None) {
         // TODO: handle queue overflow, e.g., by dropping the message or logging
         // an error
@@ -146,14 +149,15 @@ int MQTTEndpoint::msg_arvd(void* context, char* topicName, int topicLen,
 NetResult MQTTEndpoint::publish(MQTTMessage&& message) {
     MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
 
-    int err = MQTTAsync_send(internal_->client, message.topic().data(), message.payload().size(),
-                             message.payload().data(), message.qos_, message.retained_, &opts);
+    int err = MQTTAsync_send(internal_->client, message.topic().data(),
+                             message.payload().size(), message.payload().data(),
+                             message.qos_, message.retained_, &opts);
     if (err != MQTTASYNC_SUCCESS) {
         return {NetStatus::Error, 0};
     }
 
-    internal_->pending_messages.emplace_back(
-        std::chrono::steady_clock::now(), opts.token, std::move(message));
+    internal_->pending_messages.emplace_back(std::chrono::steady_clock::now(),
+                                             opts.token, std::move(message));
 
     return {NetStatus::Success, message.payload().size()};
 };
@@ -167,9 +171,18 @@ NetStatus MQTTEndpoint::subscribe(const StringView topic) {
 }
 
 NetStatus MQTTEndpoint::recv(const StringView topic, MQTTMessage& message) {
-    auto& queue = internal_->topic_queues[std::string(topic.data(), topic.size())];
+    auto queue =
+        internal_->topic_queues.find(std::string(topic.data(), topic.size()));
+    if (queue == internal_->topic_queues.end()) {
+        return NetStatus::Error;  // Not subscribed to this topic
+    }
+
+    if (queue->second.empty()) {
+        return NetStatus::Empty;
+    }
+
     MQTTMessage msg;
-    auto ret = queue.try_pop(msg);
+    auto ret = queue->second.try_pop(msg);
     if (ret == queue::SPSCError::Empty) {
         return NetStatus::Empty;
     } else if (ret != queue::SPSCError::None) {
@@ -180,12 +193,18 @@ NetStatus MQTTEndpoint::recv(const StringView topic, MQTTMessage& message) {
 };
 
 PollStatus MQTTEndpoint::poll(const StringView topic, int timeoutMs) {
-    auto& queue = internal_->topic_queues[std::string(topic.data(), topic.size())];
-    
+    auto queue =
+        internal_->topic_queues.find(std::string(topic.data(), topic.size()));
+    if (queue == internal_->topic_queues.end()) {
+        return PollStatus::Error;  // Not subscribed to this topic
+    }
+
+    auto& queue_ref = queue->second;
     // simple check if the queue is not empty
     auto now = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - now < std::chrono::milliseconds(timeoutMs)) {
-        if (!queue.empty()) {
+    while (std::chrono::steady_clock::now() - now <
+           std::chrono::milliseconds(timeoutMs)) {
+        if (!queue_ref.empty()) {
             return PollStatus::Ready;
         }
         std::this_thread::yield();

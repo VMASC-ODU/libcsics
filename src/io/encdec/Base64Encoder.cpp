@@ -14,7 +14,7 @@ Base64Encoder::Base64Encoder() {
     holdover_[2] = 0;
 }
 
-static inline void get_4_chars(uint8_t* in, uint8_t* out) {
+static inline void get_4_chars(const uint8_t* in, uint8_t* out) {
     out[0] = in[0] >> 2;
     out[1] = ((in[0] & 0b00000011) << 4) | ((in[1] & 0b11110000) >> 4);
     out[2] = ((in[1] & 0b00001111) << 2) | ((in[2] & 0b11000000) >> 6);
@@ -26,9 +26,8 @@ static inline void get_4_chars(uint8_t* in, uint8_t* out) {
 }
 
 static inline EncodingResult encode_b64_no_holdover(BufferView in,
-                                                    BufferView out,
+                                                    MutableBufferView out,
                                                     uint8_t holdover[3]) {
-    uint8_t input[3];
     auto* in_ptr = in.data();
     auto* out_ptr = out.data();
     while (in.size() >= 3) {
@@ -40,9 +39,11 @@ static inline EncodingResult encode_b64_no_holdover(BufferView in,
             return result;
         }
 
-        input[0] = in.u8()[0];
-        input[1] = in.u8()[1];
-        input[2] = in.u8()[2];
+        const uint8_t input[3] = {
+            in.u8()[0],
+            in.u8()[1],
+            in.u8()[2],
+        };
         get_4_chars(input, out.u8());
         out += 4;
         in += 3;
@@ -62,7 +63,7 @@ static inline EncodingResult encode_b64_no_holdover(BufferView in,
     return result;
 }
 
-static inline EncodingResult encode_64_1_holdover(BufferView in, BufferView out,
+static inline EncodingResult encode_64_1_holdover(BufferView in, MutableBufferView out,
                                                   uint8_t holdover[3]) {
     if (in.size() < 2) {
         EncodingResult result{};
@@ -82,10 +83,12 @@ static inline EncodingResult encode_64_1_holdover(BufferView in, BufferView out,
         return result;
     }
 
-    uint8_t input[3];
-    input[0] = holdover[1];
-    input[1] = in.u8()[0];
-    input[2] = in.u8()[1];
+    const uint8_t input[3] = {
+        holdover[1],
+        in.u8()[0],
+        in.u8()[1],
+    };
+
     get_4_chars(input, out.u8());
     out += 4;
     in += 2;
@@ -95,7 +98,7 @@ static inline EncodingResult encode_64_1_holdover(BufferView in, BufferView out,
     return r;
 }
 
-static inline EncodingResult encode_64_2_holdover(BufferView in, BufferView out,
+static inline EncodingResult encode_64_2_holdover(BufferView in, MutableBufferView out,
                                                   uint8_t holdover[3]) {
     if (in.size() < 1) {
         EncodingResult result{};
@@ -113,10 +116,11 @@ static inline EncodingResult encode_64_2_holdover(BufferView in, BufferView out,
         return result;
     }
 
-    uint8_t input[3];
-    input[0] = (holdover)[1];
-    input[1] = (holdover)[2];
-    input[2] = in.u8()[0];
+    const uint8_t input[3] = {
+        holdover[1],
+        holdover[2],
+        in.u8()[0],
+    };
     get_4_chars(input, out.u8());
     out += 4;
     in += 1;
@@ -126,7 +130,7 @@ static inline EncodingResult encode_64_2_holdover(BufferView in, BufferView out,
     return r;
 }
 
-EncodingResult Base64Encoder::encode(BufferView in, BufferView out) {
+EncodingResult Base64Encoder::encode(BufferView in, MutableBufferView out) {
     EncodingResult result{};
     if (in.empty()) {
         result.processed = 0;
@@ -150,7 +154,7 @@ EncodingResult Base64Encoder::encode(BufferView in, BufferView out) {
     return result;
 }
 
-EncodingResult Base64Encoder::finish(BufferView in, BufferView out) {
+EncodingResult Base64Encoder::finish(BufferView in, MutableBufferView out) {
     auto r = encode(in, out);
     if (r.status == EncodingStatus::OutputBufferFull) {
         return r;

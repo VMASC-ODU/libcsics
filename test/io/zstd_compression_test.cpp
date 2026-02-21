@@ -23,7 +23,7 @@ TEST(CSICSCompressionTests, ZSTDCompressorBasic) {
     std::vector<unsigned char> compressed_data;
     compressed_data.resize(ZSTD_compressBound(data_size));
     BufferView in_buffer(input_data);
-    BufferView out_buffer(compressed_data);
+    MutableBufferView out_buffer(compressed_data);
 
     CompressionResult result{};
     std::size_t size = 0;

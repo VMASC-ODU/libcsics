@@ -10,11 +10,11 @@ class ZLIBCompressor : public ICompressor {
     ~ZLIBCompressor() override;
 
     CompressionStatus init();
-    CompressionResult compress_partial(BufferView in, BufferView out) override;
-    CompressionResult compress_buffer(BufferView in, BufferView out) override;
-    CompressionResult finish(BufferView in, BufferView out) override;
+    CompressionResult compress_partial(BufferView in, MutableBufferView out) override;
+    CompressionResult compress_buffer(BufferView in, MutableBufferView out) override;
+    CompressionResult finish(BufferView in, MutableBufferView out) override;
 
-    inline CompressionResult operator()(BufferView in, BufferView out) {
+    inline CompressionResult operator()(BufferView in, MutableBufferView out) {
         return compress_buffer(in, out);
     }
 

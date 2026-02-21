@@ -44,7 +44,7 @@ class MQTTEndpoint {
     struct Internal;
     using ConnectionParams = URI;
 
-    MQTTEndpoint(BufferView client_id);
+    MQTTEndpoint(StringView client_id);
     ~MQTTEndpoint();
     MQTTEndpoint(const MQTTEndpoint&) = delete;
     MQTTEndpoint& operator=(const MQTTEndpoint&) = delete;

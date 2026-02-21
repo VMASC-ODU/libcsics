@@ -1,11 +1,13 @@
+#include "ZLIBCompressor.hpp"
+
 #include <zlib.h>
 
-#include "ZLIBCompressor.hpp"
 #include <cstring>
 
 namespace csics::io::compression {
 
-ZLIBCompressor::ZLIBCompressor(): zstream_(new z_stream), state_(State::Compressing) {
+ZLIBCompressor::ZLIBCompressor()
+    : zstream_(new z_stream), state_(State::Compressing) {
     z_stream* zstream = static_cast<z_stream*>(zstream_);
     std::memset(zstream, 0, sizeof(z_stream));
     int ret = deflateInit(zstream, Z_DEFAULT_COMPRESSION);
@@ -33,15 +35,15 @@ ZLIBCompressor::~ZLIBCompressor() {
     }
 }
 
-static void set_zstream(z_streamp z, BufferView in, BufferView out) {
-    z->next_in = in.uc();
+static void set_zstream(z_streamp z, BufferView in, MutableBufferView out) {
+    z->next_in = const_cast<unsigned char*>(in.uc());
     z->avail_in = in.size();
-    z->next_out = out.uc();
+    z->next_out = const_cast<unsigned char*>(out.uc());
     z->avail_out = out.size();
 }
 
 CompressionResult ZLIBCompressor::compress_partial(BufferView in,
-                                                   BufferView out) {
+                                                   MutableBufferView out) {
     auto* zstream = static_cast<z_streamp>(zstream_);
     set_zstream(zstream, in, out);
 
@@ -75,7 +77,7 @@ CompressionResult ZLIBCompressor::compress_partial(BufferView in,
     return ret;
 }
 CompressionResult ZLIBCompressor::compress_buffer(BufferView in,
-                                                  BufferView out) {
+                                                  MutableBufferView out) {
     size_t total_compressed = 0;
     size_t total_consumed = 0;
 
@@ -97,13 +99,11 @@ CompressionResult ZLIBCompressor::compress_buffer(BufferView in,
 
     return r;
 }
-CompressionResult ZLIBCompressor::finish(BufferView in, BufferView out) {
+CompressionResult ZLIBCompressor::finish(BufferView in, MutableBufferView out) {
     if (state_ == State::Finished) {
-        return CompressionResult{
-            .compressed = 0,
-            .input_consumed = 0,
-            .status = CompressionStatus::InvalidState
-        };
+        return CompressionResult{.compressed = 0,
+                                 .input_consumed = 0,
+                                 .status = CompressionStatus::InvalidState};
     } else {
         state_ = State::Finishing;
     }

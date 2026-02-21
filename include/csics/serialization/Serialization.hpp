@@ -2,13 +2,13 @@
 #pragma once
 
 #ifndef CSICS_BUILD_SERIALIZATION
-#error "Serialization support is not enabled. Please define CSICS_BUILD_SERIALIZATION to use serialization."
+#error \
+    "Serialization support is not enabled. Please define CSICS_BUILD_SERIALIZATION to use serialization."
 #endif
 #include <concepts>
+#include <csics/Buffer.hpp>
 #include <string_view>
 #include <tuple>
-
-#include <csics/Buffer.hpp>
 
 namespace csics::serialization {
 
@@ -21,8 +21,12 @@ enum class SerializationStatus {
 };
 
 struct SerializationResult {
-    BufferView written_view;
+    MutableBufferView written_view;
     SerializationStatus status;
+
+    constexpr SerializationResult(MutableBufferView written_view,
+                                  SerializationStatus status)
+        : written_view(written_view), status(status) {}
 };
 
 template <typename T>
@@ -43,7 +47,7 @@ concept FieldList = requires { std::tuple_size<T>::value; } &&
                     }(std::make_index_sequence<std::tuple_size<T>::value>{});
 
 template <typename S>
-concept Serializer = requires(S s, BufferView bv, std::string_view key) {
+concept Serializer = requires(S s, MutableBufferView bv, std::string_view key) {
     { s.begin_obj(bv) } -> std::same_as<SerializationStatus>;
     { s.end_obj(bv) } -> std::same_as<SerializationStatus>;
     { s.begin_array(bv) } -> std::same_as<SerializationStatus>;
@@ -94,19 +98,38 @@ template <typename T>
 concept ArraySerializable = ArraySerializableImpl<std::remove_cvref_t<T>>;
 
 template <typename T, typename S>
-concept PrimitiveSerializable = requires(T t, S s, BufferView bv) {
-    { s.value(bv, t) } -> std::same_as<SerializationStatus>;
-} && !StructSerializable<T> && !ArraySerializable<T>;
+concept PrimitiveSerializable =
+    !StructSerializable<T> && !ArraySerializable<T> && Serializer<S> &&
+    requires(T t, S s, MutableBufferView bv) {
+        { s.value(bv, t) } -> std::same_as<SerializationStatus>;
+    };
 
-template <typename T, typename S>
-concept Serializable = requires(T t, S s, BufferView bv) {
-    { t.serialize(s, bv) } -> std::same_as<SerializationStatus>;
-};
+template <typename M, typename S>
+concept MapSerializable =
+    requires(M m) {
+        typename M::key_type;
+        typename M::mapped_type;
+        { m.size() } -> std::convertible_to<std::size_t>;
+        { m.begin() } -> std::input_iterator;
+        { m.end() } -> std::input_iterator;
+    } &&
+    std::is_convertible_v<typename M::key_type,
+                          std::string_view> &&  // Ensure keys are string-like
+    (StructSerializable<typename M::mapped_type> ||
+     ArraySerializable<typename M::mapped_type> ||
+     PrimitiveSerializable<typename M::mapped_type, S>);
 
 struct serializer {
     template <Serializer S, typename T>
+    SerializationResult operator()(S& s, MutableBufferView bv, T&& obj) const {
+        return apply(s, bv, std::forward<T>(obj));
+    }
+
+   private:
+    template <Serializer S, typename T>
         requires StructSerializable<std::remove_cvref_t<T>>
-    SerializationResult operator()(S& s, BufferView& bv, T&& obj) const {
+    static constexpr SerializationResult apply(S& s, MutableBufferView& bv,
+                                               T&& obj) {
         auto fields = get_fields<T>();
         auto bv_ = bv;
         s.begin_obj(bv_);
@@ -114,8 +137,8 @@ struct serializer {
             [&](auto&&... field) {
                 (...,
                  (s.key(bv_, field.name()),
-                  bv_ += this->operator()(
-                      s, bv_, obj.*(field.ptr())).written_view.size()));  // Serialize each field
+                  bv_ += apply(s, bv_, obj.*(field.ptr()))
+                             .written_view.size()));  // Serialize each field
             },
             fields);
         s.end_obj(bv_);
@@ -124,11 +147,12 @@ struct serializer {
 
     template <Serializer S, typename T>
         requires ArraySerializable<std::remove_cvref_t<T>>
-    SerializationResult operator()(S& s, BufferView& bv, T&& arr) const {
+    static constexpr SerializationResult apply(S& s, MutableBufferView& bv,
+                                               T&& arr) {
         auto bv_ = bv;
         s.begin_array(bv_);
         for (std::size_t i = 0; i < arr.size(); ++i) {
-            auto res = this->operator()(s, bv_, arr.data()[i]);
+            auto res = apply(s, bv_, arr.data()[i]);
             if (res.status != SerializationStatus::Ok) {
                 return {bv(0, bv.size() - bv_.size()), res.status};
             }
@@ -139,25 +163,31 @@ struct serializer {
     }
 
     template <Serializer S, typename T>
+        requires MapSerializable<std::remove_cvref_t<T>, S>
+    static constexpr SerializationResult apply(S& s, MutableBufferView& bv,
+                                               T&& map) {
+        auto bv_ = bv;
+        s.begin_obj(bv_);
+        for (const auto& [key, value] : map) {
+            s.key(bv_, key);
+            auto res = apply(s, bv_, value);
+            if (res.status != SerializationStatus::Ok) {
+                return {bv(0, bv.size() - bv_.size()), res.status};
+            }
+            bv_ += res.written_view.size();
+        }
+        s.end_obj(bv_);
+        return {bv(0, bv.size() - bv_.size()), SerializationStatus::Ok};
+    };
+
+    template <Serializer S, typename T>
         requires PrimitiveSerializable<std::remove_cvref_t<T>, S>
-    SerializationResult operator()(S& s, BufferView& bv, T&& value) const {
+        && (!MapSerializable<std::remove_cvref_t<T>, S>)
+    constexpr static SerializationResult apply(S& s, MutableBufferView& bv,
+                                               T&& value) {
         auto bv_ = bv;
         auto status = s.value(bv_, value);
         return {bv(0, bv.size() - bv_.size()), status};
-    }
-
-    template <Serializer S, typename T>
-    SerializationStatus operator()(S&, BufferView&, T&&) const {
-        static_assert([] { return false; }(), "Type is not serializable");
-        return SerializationStatus::Ok;  // Unreachable, but satisfies return
-                                         // type
-    }
-
-    template <Serializer S, typename T>
-    SerializationStatus operator()(BufferView&, T&&) const {
-        static_assert([] { return false; }(), "Type is not serializable");
-        return SerializationStatus::Ok;  // Unreachable, but satisfies return
-                                         // type
     }
 };
 

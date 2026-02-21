@@ -14,8 +14,8 @@ TEST(CSICSCompressionTests, ZLIBCompressionTest) {
     auto compressor = ICompressor::create(CompressorType::ZLIB);
 
     auto generated_bytes = generate_random_bytes(1024 * 1024);
-    std::vector<unsigned char> compressed_buffer(compressBound(1024 * 1024), 0);
-    BufferView output_view(compressed_buffer);
+    std::vector<uint8_t> compressed_buffer(compressBound(1024 * 1024), 0);
+    MutableBufferView output_view(compressed_buffer);
     BufferView input_view(generated_bytes);
 
     auto result = compressor->compress_buffer(input_view, output_view);

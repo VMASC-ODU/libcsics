@@ -36,10 +36,10 @@ class ICompressor {
    public:
     virtual ~ICompressor() = default;
     virtual CompressionResult compress_partial(BufferView in,
-                                               BufferView out) = 0;
+                                               MutableBufferView out) = 0;
     virtual CompressionResult compress_buffer(BufferView in,
-                                              BufferView out) = 0;
-    virtual CompressionResult finish(BufferView in, BufferView out) = 0;
+                                              MutableBufferView out) = 0;
+    virtual CompressionResult finish(BufferView in, MutableBufferView out) = 0;
 
     static std::unique_ptr<ICompressor> create(CompressorType type);
 };

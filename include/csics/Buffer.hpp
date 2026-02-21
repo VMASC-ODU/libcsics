@@ -12,72 +12,93 @@ template <typename T>
 concept BufferType =
     std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
 
-class BufferView {
-   public:
-    using value_type = char;
-    using iterator = char*;
-    using const_iterator = const char*;
+template <typename T>
+    concept IsByteType = std::same_as<std::remove_cv_t<T>, uint8_t> ||
+                          std::same_as<std::remove_cv_t<T>, unsigned char> ||
+                          std::same_as<std::remove_cv_t<T>, char> ||
+                            std::same_as<std::remove_cv_t<T>, std::byte>;
 
-    const char* data() const noexcept { return buf_; }
+template <typename T, typename U>
+    concept IsConstOf = std::is_const_v<T> && std::same_as<std::remove_const_t<T>, U>;
+
+template <typename T = char>
+    requires IsByteType<T>
+class BasicBufferView {
+   public:
+    using value_type = T;
+    using iterator = T*;
+    using const_iterator = const T*;
+
+    const T* data() const noexcept { return buf_; }
     std::size_t size() const noexcept { return size_; }
-    char* data() noexcept { return buf_; }
+    T* data() noexcept { return buf_; }
 
     const uint8_t* u8() const noexcept {
         return reinterpret_cast<const uint8_t*>(buf_);
     }
-    uint8_t* u8() noexcept { return reinterpret_cast<uint8_t*>(buf_); }
+    auto* u8() noexcept {
+        if constexpr (std::is_const_v<T>) {
+            return reinterpret_cast<const uint8_t*>(buf_);
+        } else {
+            return reinterpret_cast<uint8_t*>(buf_);
+        }
+    }
 
     const unsigned char* uc() const noexcept {
         return reinterpret_cast<const unsigned char*>(buf_);
     }
-    unsigned char* uc() noexcept {
-        return reinterpret_cast<unsigned char*>(buf_);
+    auto* uc() noexcept {
+        if constexpr (std::is_const_v<T>) {
+            return reinterpret_cast<const unsigned char*>(buf_);
+        } else {
+            return reinterpret_cast<unsigned char*>(buf_);
+        }
     }
 
     bool empty() const noexcept { return size_ == 0; }
 
-    BufferView subview(std::size_t offset, std::size_t length) const noexcept {
+    BasicBufferView subview(std::size_t offset, std::size_t length) const noexcept {
         if (offset >= size_) {
-            return BufferView(nullptr, 0);
+            return BasicBufferView(nullptr, 0);
         }
         if (offset + length > size_) {
             length = size_ - offset;
         }
-        return BufferView(buf_ + offset, length);
+        return BasicBufferView(buf_ + offset, length);
     }
 
-    BufferView head(std::size_t length) const noexcept {
+    BasicBufferView head(std::size_t length) const noexcept {
         if (length > size_) {
             length = size_;
         }
-        return BufferView(buf_, length);
+        return BasicBufferView(buf_, length);
     }
 
-    BufferView tail(std::size_t length) const noexcept {
+    BasicBufferView tail(std::size_t length) const noexcept {
         if (length > size_) {
             length = size_;
         }
-        return BufferView(buf_ + (size_ - length), length);
+        return BasicBufferView(buf_ + (size_ - length), length);
     }
 
     operator bool() const noexcept { return buf_ != nullptr && size_ > 0; }
 
-    bool operator==(const BufferView& other) const noexcept {
+    bool operator==(const BasicBufferView& other) const noexcept {
         return buf_ == other.buf_ && size_ == other.size_;
     }
 
-    bool operator!=(const BufferView& other) const noexcept {
+    bool operator!=(const BasicBufferView& other) const noexcept {
         return !(*this == other);
     }
 
-    BufferView operator+(std::size_t offset) const noexcept {
+    BasicBufferView operator+(std::size_t offset) const noexcept {
         if (offset > size_) {
-            return BufferView(nullptr, 0);
+            return BasicBufferView(nullptr, 0);
         }
-        return BufferView(buf_ + offset, size_ - offset);
+        return BasicBufferView(buf_ + offset, size_ - offset);
     }
 
-    BufferView& operator+=(std::size_t offset) noexcept {
+    BasicBufferView& operator+=(std::size_t offset) noexcept {
         if (offset > size_) {
             buf_ = nullptr;
             size_ = 0;
@@ -88,7 +109,7 @@ class BufferView {
         return *this;
     }
 
-    BufferView& operator++() noexcept {
+    BasicBufferView& operator++() noexcept {
         if (!empty()) {
             ++buf_;
             --size_;
@@ -96,8 +117,8 @@ class BufferView {
         return *this;
     }
 
-    BufferView operator++(int) noexcept {
-        BufferView temp = *this;
+    BasicBufferView operator++(int) noexcept {
+        BasicBufferView temp = *this;
         ++(*this);
         return temp;
     }
@@ -107,7 +128,7 @@ class BufferView {
         return buf_[index];
     }
 
-    BufferView operator()(std::size_t offset,
+    BasicBufferView operator()(std::size_t offset,
                           std::size_t length) const noexcept {
         return subview(offset, length);
     }
@@ -120,13 +141,13 @@ class BufferView {
     const char* cbegin() const noexcept { return buf_; }
     const char* cend() const noexcept { return buf_ + size_; }
 
-    explicit BufferView(void* buf, std::size_t size)
+    explicit constexpr BasicBufferView(void* buf, std::size_t size)
         : buf_(reinterpret_cast<char*>(buf)), size_(size) {}
-    BufferView() : buf_(nullptr), size_(0) {}
+    constexpr BasicBufferView() : buf_(nullptr), size_(0) {}
 
-    BufferView(const BufferView& other) noexcept
+    constexpr BasicBufferView(const BasicBufferView& other) noexcept
         : buf_(other.buf_), size_(other.size_) {}
-    BufferView& operator=(const BufferView& other) noexcept {
+    constexpr BasicBufferView& operator=(const BasicBufferView& other) noexcept {
         if (this != &other) {
             buf_ = other.buf_;
             size_ = other.size_;
@@ -134,12 +155,12 @@ class BufferView {
         return *this;
     }
 
-    BufferView(BufferView&& other) noexcept
+    constexpr BasicBufferView(BasicBufferView&& other) noexcept
         : buf_(other.buf_), size_(other.size_) {
         other.buf_ = nullptr;
         other.size_ = 0;
     }
-    BufferView& operator=(BufferView&& other) noexcept {
+    constexpr BasicBufferView& operator=(BasicBufferView&& other) noexcept {
         if (this != &other) {
             buf_ = other.buf_;
             size_ = other.size_;
@@ -149,22 +170,51 @@ class BufferView {
         return *this;
     }
 
-    template <typename T>
-        requires BufferType<T>
-    BufferView(std::vector<T>& vec) noexcept {
-        if (vec.empty()) {
-            buf_ = nullptr;
-            size_ = 0;
-        } else {
-            buf_ = reinterpret_cast<char*>(vec.data());
-            size_ = vec.size() * sizeof(T);
-        }
+
+    template <BufferType U>
+        explicit constexpr BasicBufferView(U& obj) noexcept
+        : buf_(reinterpret_cast<T*>(&obj)), size_(sizeof(U)) {}
+
+    // implicit conversion from MutableBufferView to BufferView
+    template <typename U = T>
+        requires IsConstOf<T, U>
+    constexpr BasicBufferView(const BasicBufferView<std::remove_const_t<T>>& other) noexcept
+        : buf_(other.data()), size_(other.size()) {}
+
+    template <typename U = T>
+        requires IsConstOf<T, U>
+    constexpr BasicBufferView& operator=(const BasicBufferView<std::remove_const_t<T>>& other) noexcept {
+        buf_ = other.data();
+        size_ = other.size();
+        return *this;
     }
 
+    template <typename U>
+        requires IsByteType<U>
+        constexpr BasicBufferView(std::vector<U>& vec) noexcept
+        : buf_(reinterpret_cast<T*>(vec.data())), size_(vec.size() * sizeof(U)) {}
+
+
+    template <typename U>
+        requires IsByteType<U>
+        constexpr BasicBufferView(BasicBufferView<U> byte_view) noexcept
+        : BasicBufferView(BasicBufferView(reinterpret_cast<T*>(byte_view.data()), byte_view.size())) {}
+
+    template <std::size_t N>
+        constexpr BasicBufferView(const std::array<T, N>& arr) noexcept
+        : buf_(const_cast<T*>(arr.data())), size_(N * sizeof(T)) {}
+
+    template <std::size_t N>
+        constexpr BasicBufferView(T(&arr)[N]) noexcept
+        : buf_(arr), size_(N) {}
+
    private:
-    char* buf_;
+    T* buf_;
     std::size_t size_;
 };
+
+using BufferView = BasicBufferView<const char>;
+using MutableBufferView = BasicBufferView<char>;
 
 template <BufferType T = char>
 class TypedView {
